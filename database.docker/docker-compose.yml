@@ -1,0 +1,24 @@
+version: '3.5'
+
+services:
+  mysql:
+    image: mysql:latest
+    container_name: mysql8_q2db_test
+    restart: on-failure
+    ports:
+      - "3308:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: q2test
+      MYSQL_USER: q2user
+      MYSQL_PASSWORD: q2test
+      MYSQL_DATABASE: test
+  postgres:
+    image: postgres:13.3
+    container_name: postgressql_q2db_test
+    restart: on-failure
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: "q2user"
+      POSTGRES_PASSWORD: "q2test"
+
