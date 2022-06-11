@@ -299,8 +299,9 @@ class Q2Db:
             primary_column_definition = self.db_schema.get_schema_attr(
                 column_definition["to_table"], column_definition["to_column"]
             )
-            for x in ["datatype", "datalen", "datadec"]:
-                column_definition[x] = primary_column_definition[x]
+            if primary_column_definition:
+                for x in ["datatype", "datalen", "datadec"]:
+                    column_definition[x] = primary_column_definition[x]
 
         if "datatype" not in column_definition:
             return None

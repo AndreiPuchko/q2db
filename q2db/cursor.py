@@ -15,6 +15,7 @@ import json
 import csv
 
 from datetime import datetime
+from q2db.utils import num
 
 
 class Record:
@@ -72,28 +73,28 @@ class Q2Cursor:
     def last_record(self):
         return self.q2_db.last_record
 
-    def lastDeleteData(self):
+    def last_deleted_row(self):
         return self.q2_db.lastDeleteData
 
-    def subFilter(self, column, text):
+    def sub_filter(self, column, text):
         if self.table_name:
             f = "".join(self.primary_key_columns)
             f += f",{column}" if column not in self.primary_key_columns else ""
             sql = f"select {f} from {self.table_name} where "
             if self.where:
                 sql += f" {self.where} and "
-            sql += f" ({self.prepColumnSearch(column,text)}) "
+            sql += f" ({self.prepare_column_search(column,text)}) "
             if self.order:
                 sql += f" order by {self.order}"
             error, _rows = self.q2_db._cursor(f"""{sql}""")
             return _rows
         return {}
 
-    def prepColumnSearch(self, column, searchText="", placeHolder="before"):
+    def prepare_column_search(self, column, searchText="", placeHolder="before"):
         rez = []
         _or = []
 
-        def _orAppend(rez):
+        def _or_append(rez):
             _or.append(f"({' and '.join(rez)})") if rez else ""
 
         mode = "like"
@@ -103,7 +104,7 @@ class Q2Cursor:
             elif x == "-":
                 mode = "not like"
             elif x == "*":
-                _orAppend(rez)
+                _or_append(rez)
                 rez = []
                 mode = "like"
             elif x:
@@ -111,7 +112,7 @@ class Q2Cursor:
                     rez.append(f" {column} {mode} '%{x}%' ")
                 else:
                     rez.append(f" '%{x}%' {mode} {column} ")
-        _orAppend(rez)
+        _or_append(rez)
         return " or ".join(_or)
 
     def update(self, data, refresh=True, where=True):
@@ -181,7 +182,7 @@ class Q2Cursor:
     def bof(self):
         return self._currentRow == 0
 
-    def getPkRow(self, dataDic):
+    def get_prymary_key_row(self, dataDic):
         pkName = [x for x in self.primary_key_columns][0]
         pkValue = str(dataDic[pkName])
         for x in range(self.row_count()):
@@ -234,6 +235,26 @@ class Q2Cursor:
 
     def get_columns(self):
         return [x for x in self.record(0)]
+
+    def get_next_sequence(self, column, start_value=0):
+        if self.table_name:
+            sql = f"""
+            select min({column}+1) as seq
+            from {self.table_name}
+            where {column} >={start_value}
+                and {column}+1 not in
+                    (
+                    select {column}
+                    from {self.table_name}
+                    {'where' if self.where else '' } {self.where}
+                    )
+                {'and' if self.where else '' } {self.where}
+            order by {column}
+            """
+            seq = num(self.q2_db.cursor(sql).record(0)["seq"])
+            return seq + (0 if seq else 1)
+        else:
+            return "0"
 
     def _prepare_export(self, file):
         rez = []
