@@ -10,7 +10,7 @@ readme = "README.md"
 line-length = 110
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8"
 mysql-connector-python = "^8.0.29"
 psycopg2-binary = "^2.9.3"
 
