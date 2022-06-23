@@ -1,3 +1,4 @@
+[![Python application](https://github.com/AndreiPuchko/q2db/actions/workflows/main.yml/badge.svg)](https://github.com/AndreiPuchko/q2db/actions/workflows/main.yml)
 # The light Python DB API wrapper with some ORM functions (MySQL, PostgreSQL, SQLite)
 ## Quick start (run demo files)
 ## - in docker:
