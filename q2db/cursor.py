@@ -254,7 +254,7 @@ class Q2Cursor:
             seq = num(self.q2_db.cursor(sql).record(0)["seq"])
             return seq + (0 if seq else 1)
         else:
-            return "0"
+            return 0
 
     def _prepare_export(self, file):
         rez = []

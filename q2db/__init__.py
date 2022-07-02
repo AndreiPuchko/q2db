@@ -1,1 +1,1 @@
-__version__ = '0.1.0'
+from q2db.version import __version__
