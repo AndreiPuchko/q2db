@@ -186,7 +186,7 @@ class Q2Db:
             )
             connection.autocommit = True
         elif self.db_engine_name == "sqlite3":
-            connection = self.db_api_engine.connect(database=self.database_name, isolation_level=None)
+            connection = self.db_api_engine.connect(database=self.database_name, isolation_level=None, check_same_thread=False)
         return connection
 
     def _parse_url(self):
