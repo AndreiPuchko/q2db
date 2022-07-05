@@ -42,6 +42,7 @@ class Q2Cursor:
         self._currentRow = 0
         self.refresh()
         self.r = Record(self)
+        self.tick_callback = None
 
     def get_table_names_sql(table_select_clause="", database_name=""):
         """returns sql statement (depending database) for select a list of all tables or given table"""
@@ -256,16 +257,6 @@ class Q2Cursor:
         else:
             return 0
 
-    def _prepare_export(self, file):
-        rez = []
-        for x in self.records():
-            rez.append(x)
-        if not hasattr(file, "write"):
-            write_to = open(file, "w")
-        else:
-            write_to = file
-        return write_to, rez
-
     def _prepare_import(self, file):
         if not hasattr(file, "read"):
             read_from = open(file)
@@ -273,9 +264,8 @@ class Q2Cursor:
             read_from = file
         return read_from
 
-    def import_json(self, file):
+    def import_json(self, file, tick_callback=None):
         """read json from file or file-like object
-
         ;param file: str or file-like object
         """
         if self.table_name:
@@ -283,38 +273,55 @@ class Q2Cursor:
             rows = json.load(read_from)
             for x in rows:
                 self.insert(x)
+                tick_callback() if tick_callback else None
+                if self.last_sql_error():
+                    raise Exception("Import error")
 
-    def export_json(self, file):
-        """write json into file or file-like object
-
-        ;param file: str or file-like object
-        """
-        write_to, rez = self._prepare_export(file)
-        if rez:
-            json.dump(rez, write_to, indent=1)
-
-    def export_csv(self, file):
-        """write csv(excel dialect) into file or file-like object
-
-        ;param file: str or file-like object
-        """
-        write_to, rez = self._prepare_export(file)
-        if rez:
-            csv_writer = csv.DictWriter(write_to, [x for x in rez[0]], dialect="excel")
-            csv_writer.writeheader()
-            for x in rez:
-                csv_writer.writerow(x)
-
-    def import_csv(self, file):
+    def import_csv(self, file, tick_callback=None):
         """read csv from file or file-like object
-
         ;param file: str or file-like object
         """
         if self.table_name:
             read_from = self._prepare_import(file)
             rows = csv.DictReader(read_from, dialect="excel")
+            self.q2_db.connection.execute("begin")
             for x in rows:
                 self.insert(x)
+                tick_callback() if tick_callback else None
+                if self.last_sql_error():
+                    raise Exception("Import error")
+            self.q2_db.connection.execute("commit")
+
+    def _prepare_export(self, file, tick_callback=None):
+        rez = []
+        for x in self.records():
+            rez.append(x)
+            tick_callback() if tick_callback else None
+
+        if not hasattr(file, "write"):
+            write_to = open(file, "w")
+        else:
+            write_to = file
+        return write_to, rez
+
+    def export_json(self, file, tick_callback=None):
+        """write json into file or file-like object
+        ;param file: str or file-like object
+        """
+        write_to, rez = self._prepare_export(file, tick_callback)
+        if rez:
+            json.dump(rez, write_to, indent=1)
+
+    def export_csv(self, file, tick_callback=None):
+        """write csv(excel dialect) into file or file-like object
+        ;param file: str or file-like object
+        """
+        write_to, rez = self._prepare_export(file, tick_callback)
+        if rez:
+            csv_writer = csv.DictWriter(write_to, [x for x in rez[0]], dialect="excel")
+            csv_writer.writeheader()
+            for x in rez:
+                csv_writer.writerow(x)
 
 
 class Q2SqliteCursor(Q2Cursor):

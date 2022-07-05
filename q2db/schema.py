@@ -88,7 +88,7 @@ class Q2DbSchema:
             uk = table.get("uk")
             index = table.get("index")
             table = table["table"]
-        
+
         if table not in self.schema["tables"]:
             self.schema["tables"][table] = {"columns": {}, "indexes": {}}
         self.schema["tables"][table]["columns"][column] = {}

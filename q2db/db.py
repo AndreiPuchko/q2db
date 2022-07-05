@@ -186,7 +186,9 @@ class Q2Db:
             )
             connection.autocommit = True
         elif self.db_engine_name == "sqlite3":
-            connection = self.db_api_engine.connect(database=self.database_name, isolation_level=None, check_same_thread=False)
+            connection = self.db_api_engine.connect(
+                database=self.database_name, isolation_level=None, check_same_thread=False
+            )
         return connection
 
     def _parse_url(self):
@@ -218,6 +220,9 @@ class Q2Db:
 
     def get_database_columns(self, table_name="", filter="", query_database=None):
         """returns database columns for given table"""
+
+        if table_name.upper().startswith("LOG_"):
+            table_name = table_name[4:]
 
         if self.db_schema is not None and filter == "" and query_database is None:
             cols = self.db_schema.get_schema_table_attr(table_name)
@@ -294,6 +299,7 @@ class Q2Db:
 
         column_definition["datadec"] = column_definition.get("datadec", 0)
         column_definition["primarykey"] = "PRIMARY KEY" if column_definition.get("pk", "") else ""
+        column_definition["ai"] = "AUTOINCREMENT" if column_definition.get("ai", "") else ""
         if column_definition.get("to_table") and column_definition.get("to_column"):
             # pull attributes from primary table
             primary_column_definition = self.db_schema.get_schema_attr(
@@ -311,6 +317,8 @@ class Q2Db:
             column_definition["default"] = "DEFAULT '0'"
             column_definition["size"] = "({datalen},{datadec})".format(**column_definition)
         elif "INT" in datatype:
+            if self.db_engine_name == "sqlite3":
+                column_definition["datatype"] = "INTEGER"
             column_definition["default"] = "DEFAULT '0'"
             column_definition["size"] = ""
         elif "CHAR" in datatype:
@@ -329,7 +337,7 @@ class Q2Db:
             column_definition["default"] = ""
         column_definition["escape_char"] = self.escape_char
         sql_column_text = (
-            """ {escape_char}{column}{escape_char} {datatype} {size} {primarykey} {default}""".format(
+            """ {escape_char}{column}{escape_char} {datatype} {size} {primarykey} {ai} {default}""".format(
                 **column_definition
             )
         )
@@ -338,7 +346,6 @@ class Q2Db:
             sql_cmd = f"ALTER TABLE {table} ADD {sql_column_text}"
         else:
             sql_cmd = f"CREATE TABLE {table} ({sql_column_text})"
-
         if not self.run_migrate_sql(sql_cmd):
             return False
         if not self.guest_mode and not table.upper().startswith("LOG_"):
@@ -464,32 +471,45 @@ class Q2Db:
                     self.last_error_data = x
                     return False
 
-        table_columns = self.get_database_columns(table_name)
+        table_columns = self.get_database_columns(table_name[:])
         primary_key_columns = self.get_primary_key_columns(table_name)
-        columns_list = [x for x in record if x in table_columns]
 
-        for x in primary_key_columns:
-            if x not in columns_list:
-                columns_list.append(x)
-            is_string_data = True if ("char" in primary_key_columns[x]["datatype"]) else False
-            if is_string_data:
-                primary_key_value = record.get(x, "")
-            else:
-                primary_key_value = int_(record.get(x, 0))
-            while (
-                self.cursor(
-                    sql=f"""select {self.escape_char}{x}{self.escape_char}
-                            from {table_name} 
-                            where {self.escape_char}{x}{self.escape_char}='{primary_key_value}'
-                        """
-                ).row_count()
-                > 0
-            ):
+        aipk = ""
+        if len(primary_key_columns) == 1:
+            for d in primary_key_columns:
+                if primary_key_columns[d].get("ai"):
+                    aipk = d
+
+        columns_list = [x for x in record if x in table_columns]
+        if not aipk:
+            # create primary key value
+            for x in primary_key_columns:
+                if x not in columns_list:
+                    columns_list.append(x)
+                is_string_data = True if ("char" in primary_key_columns[x]["datatype"]) else False
                 if is_string_data:
-                    primary_key_value += "_"
+                    primary_key_value = record.get(x, "")
                 else:
-                    primary_key_value += 1
-            record[x] = primary_key_value
+                    primary_key_value = int_(record.get(x, 0))
+                while (
+                    self.cursor(
+                        sql=f"""select {self.escape_char}{x}{self.escape_char}
+                                from {table_name} 
+                                where {self.escape_char}{x}{self.escape_char}='{primary_key_value}'
+                            """
+                    ).row_count()
+                    > 0
+                ):
+                    if is_string_data:
+                        primary_key_value += "_"
+                    else:
+                        primary_key_value += 1
+                record[x] = primary_key_value
+        else:  # autoincrement
+            if not table_name.upper().startswith("LOG_"):
+                for pkname in primary_key_columns:
+                    del record[pkname]
+                    columns_list.pop(columns_list.index(pkname))
 
         sql = (
             f"insert into {table_name} ("
@@ -504,8 +524,12 @@ class Q2Db:
 
         self._check_record_for_numbers(table_name, record)
         data = [record[x] for x in columns_list]
-
+        # print(sql, data)
         self._cursor(sql, data)
+
+        if aipk:
+            if self.db_engine_name == "sqlite3":
+                record[aipk] = self._cursor("SELECT last_insert_rowid() as aipk")[0]['aipk']
 
         if self.last_sql_error:
             return False
