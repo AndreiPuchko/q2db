@@ -76,7 +76,10 @@ class Q2DbSchema:
             return
 
         if isinstance(table, dict):
-            column = table.get("column")
+            if table.get("column"):
+                column = table.get("column")
+            if table.get("name"):
+                column = table.get("name")
             datatype = table.get("datatype")
             datalen = table.get("datalen")
             datadec = table.get("datadec")

@@ -252,7 +252,11 @@ class Q2Cursor:
                 {'and' if self.where else '' } {self.where}
             order by {column}
             """
-            seq = num(self.q2_db.cursor(sql).record(0)["seq"])
+            try:
+                seq = num(self.q2_db.cursor(sql).record(0)["seq"])
+            except Exception:
+                seq = 1
+
             return seq + (0 if seq else 1)
         else:
             return 0
@@ -272,10 +276,11 @@ class Q2Cursor:
             read_from = self._prepare_import(file)
             rows = json.load(read_from)
             for x in rows:
-                self.insert(x)
+                self.insert(x, refresh=False)
                 tick_callback() if tick_callback else None
                 if self.last_sql_error():
                     raise Exception("Import error")
+            self.refresh()
 
     def import_csv(self, file, tick_callback=None):
         """read csv from file or file-like object
@@ -284,13 +289,15 @@ class Q2Cursor:
         if self.table_name:
             read_from = self._prepare_import(file)
             rows = csv.DictReader(read_from, dialect="excel")
-            self.q2_db.connection.execute("begin")
+            # self.q2_db.connection.execute("begin transaction")
             for x in rows:
-                self.insert(x)
+                self.insert(x, refresh=False)
+                # self.q2_db._cursor(f"delete from {self.table_name}")
                 tick_callback() if tick_callback else None
                 if self.last_sql_error():
-                    raise Exception("Import error")
-            self.q2_db.connection.execute("commit")
+                    raise Exception(f"Import error: {self.last_sql_error()}, {self.last_sql()}")
+            self.refresh()
+            # self.q2_db.connection.execute("commit")
 
     def _prepare_export(self, file, tick_callback=None):
         rez = []
@@ -336,11 +343,18 @@ class Q2SqliteCursor(Q2Cursor):
         if where_clause:
             where_clause = f" where {where_clause}"
         return f"""select
-                        name,
-                        type as datatype,
-                        `notnull` as nn,
-                        `dflt_value` as `default`
-                    from PRAGMA_table_info("{table_name}")
+                        name
+                        , type as datatype
+                        , `notnull` as nn
+                        , `dflt_value` as `default`
+                        , case when pk = 1 then '*' else ' ' end as pk
+                        , (SELECT "*" 
+                            FROM sqlite_master 
+                            WHERE tbl_name="{table_name}"
+                                and ww.pk=1 
+                                and sql LIKE "%AUTOINCREMENT%"
+                            ) as ai
+                    from PRAGMA_table_info("{table_name}") ww
                     {where_clause}
                     """
 
@@ -359,14 +373,17 @@ class Q2MysqlCursor(Q2Cursor):
         if where_clause:
             where_clause = f" and {where_clause}"
         return f"""select
-                        column_name as name,
-                        data_type as datatype,
-                        column_type ,
-                        case when character_maximum_length<>0
+                        column_name as name
+                        , data_type as datatype
+                        , column_type 
+                        , case when character_maximum_length<>0
                                 then character_maximum_length
                                 else numeric_precision
-                        end as datalen,
-                        numeric_scale as datadec
+                        end as datalen
+                        , numeric_scale as datadec
+                        , column_key
+                        , case when column_key = 'PRI' then '*' else ' ' end as pk
+                        , case when extra = 'auto_increment' then '*' else ' ' end as ai
                     FROM INFORMATION_SCHEMA.COLUMNS
                     WHERE table_name = '{table_name}' and
                     table_schema='{database_name}'
@@ -380,7 +397,7 @@ class Q2PostgresqlCursor(Q2Cursor):
         return f"""SELECT table_name
                     FROM information_schema.columns
                     where table_catalog='{database_name}' and
-                        table_schema='public' {"and" if table_select_clause else ""} {table_select_clause}
+                        table_schema='public' {table_select_clause}
                      """
 
     @staticmethod
@@ -389,14 +406,16 @@ class Q2PostgresqlCursor(Q2Cursor):
             where_clause = f" and {where_clause}"
         return f"""
                     select
-                        isc.column_name as name,
-                        isc.data_type as datatype,
-                        case when isc.character_maximum_length<>0
+                        isc.column_name as name
+                        , isc.data_type as datatype
+                        , case when isc.character_maximum_length<>0
                                 then isc.character_maximum_length
                                 else isc.numeric_precision
-                        end as datalen,
-                        isc.numeric_scale as datadec,
-                        column_key
+                        end as datalen
+                        , isc.numeric_scale as datadec
+                        , column_key
+                        , case when column_key = 'PRI' then '*' else ' ' end as pk
+                        , case when isc.column_default like 'nextval%' then '*' else ' ' end as ai
 
                     from information_schema.columns isc
 

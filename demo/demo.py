@@ -3,7 +3,6 @@ if __name__ == "__main__":
 
     sys.path.insert(0, ".")
 
-from os import curdir
 from q2db.schema import Q2DbSchema
 from q2db.db import Q2Db
 from q2db.cursor import Q2Cursor
@@ -26,10 +25,10 @@ def demo(demo_database: Q2Db):
     demo_database.cursor("drop table if exists log_message_table")
 
     schema = Q2DbSchema()
-    schema.add(table="topic_table", column="uid", datatype="int", datalen=0, pk=True)
+    schema.add(table="topic_table", column="uid", datatype="int", datalen=0, pk="*")
     schema.add(table="topic_table", column="name", datatype="varchar", datalen=100)
 
-    schema.add(table="message_table", column="uid", datatype="int", datalen=9, pk=True)
+    schema.add(table="message_table", column="uid", datatype="int", datalen=9, pk=True, ai="*")
     schema.add(table="message_table", column="message", datatype="varchar", datalen=100)
     schema.add(
         table="message_table",
@@ -41,6 +40,11 @@ def demo(demo_database: Q2Db):
 
     demo_database.set_schema(schema)  # create tables in database
 
+    demo_database.cursor("alter table message_table add column f6 char(25)")
+
+    demo_database.migrate_schema()
+
+    print(demo_database.migrate_error_list)
     print(demo_database.get_tables())
 
     demo_database.insert("topic_table", {"name": "0" * 50, "uid": 99})
@@ -48,6 +52,8 @@ def demo(demo_database: Q2Db):
     demo_database.insert("topic_table", {"name": "2" * 50})
     demo_database.insert("topic_table", {"name": "3" * 50})
 
+    # return
+     
     print_cursor(demo_database.cursor(table_name="topic_table"))
     print("update row - uid=2")
     demo_database.update("topic_table", {"uid": "2", "name": "------------"})
@@ -72,7 +78,10 @@ def demo(demo_database: Q2Db):
 
     print_cursor(demo_database.cursor(table_name="log_topic_table"))
 
-    demo_database.insert("message_table", {"message": "just message", "parent_uid": 1})
+    if not demo_database.insert("message_table", {"message": "just message", "parent_uid": 1}):
+        print(demo_database.last_sql_error)
+        print(demo_database.last_error_data)
+        raise Exception("message_table inser error")
 
     if not demo_database.insert("message_table", {"message": "just message", "parent_uid": 135}):
         print(demo_database.last_sql_error)
@@ -146,8 +155,11 @@ def demo(demo_database: Q2Db):
 
     Q2DbSchema.show_table("temp/export_test.json")
     Q2DbSchema.show_table("temp/export_test.csv")
+    # print(demo_database.get_tables())
+    print(schema.get_schema_table_attr("message_table").keys())
+    print(schema.get_schema_table_attr("message_table").get("f6"))
 
 
 if __name__ == "__main__":
-
     demo(Q2Db("sqlite3", database_name=":memory:"))
+    # demo(Q2Db("sqlite3", database_name="temp/q2dbtest.sqlite"))

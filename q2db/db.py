@@ -20,8 +20,9 @@ if __name__ == "__main__":
     sys.path.insert(0, ".")
 
     # from demo.demo_mysql import demo
-    # from demo.demo_postgresql import demo
-    from demo.demo_sqlite import demo
+    from demo.demo_postgresql import demo
+
+    # from demo.demo_sqlite import demo
 
     demo()
     # from temp.try_pg_01 import demo
@@ -176,6 +177,7 @@ class Q2Db:
                 port=port if port else 3306,
                 database=database_name,
             )
+            connection.autocommit = True
         elif self.db_engine_name == "postgresql":
             connection = self.db_api_engine.connect(
                 user=user,
@@ -232,7 +234,6 @@ class Q2Db:
 
         cols = {}
         sql = self.db_cursor_class.get_table_columns_sql(table_name, filter, self.database_name)
-
         for x in self.cursor(sql).records():
             if "name" in x:
                 if "datalen" not in x:  # SQLITE
@@ -263,11 +264,15 @@ class Q2Db:
         return self.migrate_schema()
 
     def migrate_schema(self):
-        """creates (no alter) tables and columns in a physical database"""
+        """
+        creates (no alter) tables and columns in a physical database
+        """
         if self.db_schema is None:
             return
         self.migrate_error_list = []
-        for table in self.db_schema.get_schema_tables():
+        _tables = [x for x in self.db_schema.get_schema_tables()]
+        _tables += [x for x in self.get_tables() if x not in _tables]
+        for table in _tables:
             # column that are already in
             database_columns = self.get_database_columns(table, query_database=True)
             schema_columns = self.db_schema.get_schema_columns(table)
@@ -282,6 +287,13 @@ class Q2Db:
                 else:  # change schema as it is in database
                     colDic["datalen"] = database_columns[column]["datalen"]
                     colDic["datadec"] = database_columns[column]["datadec"]
+                    colDic["ai"] = database_columns[column]["ai"]
+                    colDic["pk"] = database_columns[column]["pk"]
+
+            for column in database_columns:  # pull columns from db
+                if column not in schema_columns:
+                    database_columns[column]["table"] = table
+                    self.db_schema.add(database_columns[column])
         self.migrate_indexes()
         return True
 
@@ -299,7 +311,6 @@ class Q2Db:
 
         column_definition["datadec"] = column_definition.get("datadec", 0)
         column_definition["primarykey"] = "PRIMARY KEY" if column_definition.get("pk", "") else ""
-        column_definition["ai"] = "AUTOINCREMENT" if column_definition.get("ai", "") else ""
         if column_definition.get("to_table") and column_definition.get("to_column"):
             # pull attributes from primary table
             primary_column_definition = self.db_schema.get_schema_attr(
@@ -335,21 +346,41 @@ class Q2Db:
         else:
             column_definition["size"] = ""
             column_definition["default"] = ""
-        column_definition["escape_char"] = self.escape_char
-        sql_column_text = (
-            """ {escape_char}{column}{escape_char} {datatype} {size} {primarykey} {ai} {default}""".format(
-                **column_definition
-            )
+
+        _column_definition = dict(column_definition)
+
+        _column_definition["escape_char"] = self.escape_char
+
+        _column_definition["autoincrement"] = ""
+        if _column_definition.get("ai"):
+            _column_definition["default"] = ""
+            if self.db_engine_name == "mysql":
+                _column_definition["autoincrement"] = "AUTO_INCREMENT"
+            elif self.db_engine_name == "sqlite3":
+                _column_definition["autoincrement"] = "AUTOINCREMENT"
+            elif self.db_engine_name == "postgresql":
+                _column_definition["datatype"] = ""
+                _column_definition["primarykey"] = ""
+                _column_definition["autoincrement"] = "SERIAL PRIMARY KEY"
+
+        sql_column_text = """ {escape_char}{column}{escape_char} 
+                                {datatype} {size}
+                                {primarykey} 
+                                {autoincrement} 
+                                {default}""".format(
+            **_column_definition
         )
         table = column_definition["table"]
-        if table in self.get_tables():
+
+        if table in self.get_tables(table):
             sql_cmd = f"ALTER TABLE {table} ADD {sql_column_text}"
         else:
             sql_cmd = f"CREATE TABLE {table} ({sql_column_text})"
+
         if not self.run_migrate_sql(sql_cmd):
             return False
-        if not self.guest_mode and not table.upper().startswith("LOG_"):
 
+        if not self.guest_mode and not table.upper().startswith("LOG_"):
             self.create_index(column_definition)
 
             log_column_definition = dict(column_definition)
@@ -508,8 +539,9 @@ class Q2Db:
         else:  # autoincrement
             if not table_name.upper().startswith("LOG_"):
                 for pkname in primary_key_columns:
-                    del record[pkname]
-                    columns_list.pop(columns_list.index(pkname))
+                    if pkname in record:
+                        del record[pkname]
+                        columns_list.pop(columns_list.index(pkname))
 
         sql = (
             f"insert into {table_name} ("
@@ -527,13 +559,12 @@ class Q2Db:
         # print(sql, data)
         self._cursor(sql, data)
 
-        if aipk:
-            if self.db_engine_name == "sqlite3":
-                record[aipk] = self._cursor("SELECT last_insert_rowid() as aipk")[0]['aipk']
-
         if self.last_sql_error:
             return False
         else:
+            if aipk:
+                if self.db_engine_name == "sqlite3":
+                    record[aipk] = self._cursor("SELECT last_insert_rowid() as aipk")[0]["aipk"]
             if not table_name.upper().startswith("LOG_") and table_name.upper() != "PLATFORM":
                 self.insert("log_" + table_name, record)
             return True
@@ -603,7 +634,8 @@ class Q2Db:
         for x in self.db_schema.get_child_tables(table_name, record):
             x["escape_char"] = self.escape_char
             rez = self._cursor(
-                "select 1 from {child_table} where {escape_char}{child_column}{escape_char}='{parent_value}'".format(
+                """select 1 from {child_table}
+                    where {escape_char}{child_column}{escape_char}='{parent_value}'""".format(
                     **x
                 )
             )
@@ -620,7 +652,11 @@ class Q2Db:
 
                 return False
         table_columns = self.get_database_columns(table_name)
-        columns_list = [x for x in record if x in table_columns]
+        primary_key_columns = self.get_primary_key_columns(table_name)
+        if set(self.get_primary_key_columns(table_name)).issubset(set(primary_key_columns.keys())):
+            columns_list = [x for x in record if x in primary_key_columns]
+        else:
+            columns_list = [x for x in record if x in table_columns]
         where_clause = " and ".join([f"{self.escape_char}{x}{self.escape_char} = %s " for x in columns_list])
         data = [record[x] for x in columns_list]
 
