@@ -6,7 +6,7 @@ if __name__ == "__main__":
 from q2db.schema import Q2DbSchema
 from q2db.db import Q2Db
 import time
-import cProfile
+# import cProfile
 
 
 def demo(demo_database: Q2Db):

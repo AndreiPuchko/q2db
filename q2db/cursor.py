@@ -284,12 +284,7 @@ class Q2Cursor:
         if self.table_name:
             read_from = self._prepare_import(file)
             rows = json.load(read_from)
-            for x in rows:
-                self.insert(x, refresh=False)
-                tick_callback() if tick_callback else None
-                if self.last_sql_error():
-                    raise Exception("Import error")
-            self.refresh()
+            self.import_rows(rows, tick_callback)
 
     def import_csv(self, file, tick_callback=None):
         """read csv from file or file-like object
@@ -298,15 +293,18 @@ class Q2Cursor:
         if self.table_name:
             read_from = self._prepare_import(file)
             rows = csv.DictReader(read_from, dialect="excel")
-            # self.q2_db.connection.execute("begin transaction")
-            for x in rows:
-                self.insert(x, refresh=False)
-                # self.q2_db._cursor(f"delete from {self.table_name}")
-                tick_callback() if tick_callback else None
-                if self.last_sql_error():
-                    raise Exception(f"Import error: {self.last_sql_error()}, {self.last_sql()}")
-            self.refresh()
-            # self.q2_db.connection.execute("commit")
+            self.import_rows(rows, tick_callback)
+
+    def import_rows(self, rows, tick_callback=None):
+        self.transaction()
+        for x in rows:
+            self.insert(x, refresh=False)
+            tick_callback() if tick_callback else None
+            if self.last_sql_error():
+                self.rollback()
+                raise Exception(f"Import error: {self.last_sql_error()}, {self.last_sql()}")
+        self.commit()
+        self.refresh()
 
     def _prepare_export(self, file, tick_callback=None):
         rez = []
@@ -359,10 +357,10 @@ class Q2SqliteCursor(Q2Cursor):
                         , `notnull` as nn
                         , `dflt_value` as `default`
                         , case when pk = 1 then '*' else ' ' end as pk
-                        , (SELECT "*" 
-                            FROM sqlite_master 
+                        , (SELECT "*"
+                            FROM sqlite_master
                             WHERE tbl_name="{table_name}"
-                                and ww.pk=1 
+                                and ww.pk=1
                                 and sql LIKE "%AUTOINCREMENT%"
                             ) as ai
                     from PRAGMA_table_info("{table_name}") ww
@@ -388,7 +386,7 @@ class Q2MysqlCursor(Q2Cursor):
         return f"""select
                         column_name as name
                         , data_type as datatype
-                        , column_type 
+                        , column_type
                         , case when character_maximum_length<>0
                                 then character_maximum_length
                                 else numeric_precision

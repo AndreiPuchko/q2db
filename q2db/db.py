@@ -363,10 +363,10 @@ class Q2Db:
                 _column_definition["primarykey"] = ""
                 _column_definition["autoincrement"] = "SERIAL PRIMARY KEY"
 
-        sql_column_text = """ {escape_char}{column}{escape_char} 
+        sql_column_text = """ {escape_char}{column}{escape_char}
                                 {datatype} {size}
-                                {primarykey} 
-                                {autoincrement} 
+                                {primarykey}
+                                {autoincrement}
                                 {default}""".format(
             **_column_definition
         )
@@ -536,7 +536,7 @@ class Q2Db:
                 while (
                     self.cursor(
                         sql=f"""select {self.escape_char}{x}{self.escape_char}
-                                from {table_name} 
+                                from {table_name}
                                 where {self.escape_char}{x}{self.escape_char}='{primary_key_value}'
                             """
                     ).row_count()
