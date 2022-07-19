@@ -17,7 +17,8 @@ def demo(demo_database: Q2Db):
     demo_database.set_schema(schema)  # create tables in database
 
     t = time.time()
-    demo_database.cursor("begin transaction")
+    # demo_database._cursor("begin transaction")
+    demo_database.transaction()
     # for x in range(100000):
     #     demo_database.insert("topic_table", {"name": f"{x}" * 50})
     # print(demo_database.table("topic_table").row_count())
@@ -29,7 +30,8 @@ def demo(demo_database: Q2Db):
 
     # print(demo_database.get_tables() + demo_database.get_tables())
 
-    demo_database.cursor("commit")
+    # demo_database.commit()
+    demo_database.rollback()
 
 
 if __name__ == "__main__":

@@ -44,6 +44,15 @@ class Q2Cursor:
         self.r = Record(self)
         self.tick_callback = None
 
+    def transaction(self):
+        self.q2_db.transaction()
+
+    def commit(self):
+        self.q2_db.commit()
+
+    def rollback(self):
+        self.q2_db.rollback()
+
     def get_table_names_sql(table_select_clause="", database_name=""):
         """returns sql statement (depending database) for select a list of all tables or given table"""
         pass
@@ -332,6 +341,8 @@ class Q2Cursor:
 
 
 class Q2SqliteCursor(Q2Cursor):
+    _transaction = "begin transaction"
+
     @staticmethod
     def get_table_names_sql(table_select_clause="", database_name=""):
         return f"""SELECT distinct tbl_name as table_name
@@ -360,6 +371,8 @@ class Q2SqliteCursor(Q2Cursor):
 
 
 class Q2MysqlCursor(Q2Cursor):
+    _transaction = "start transaction"
+
     @staticmethod
     def get_table_names_sql(table_select_clause="", database_name=""):
         return f"""select distinct table_name as table_name
@@ -392,6 +405,8 @@ class Q2MysqlCursor(Q2Cursor):
 
 
 class Q2PostgresqlCursor(Q2Cursor):
+    _transaction = "start transaction"
+
     @staticmethod
     def get_table_names_sql(table_select_clause="", database_name=""):
         return f"""SELECT table_name

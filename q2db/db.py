@@ -445,6 +445,17 @@ class Q2Db:
             if "int" in datatype or "dec" in datatype or "num" in datatype:
                 record[x] = "0"
 
+    def transaction(self):
+        self._cursor(self.db_cursor_class._transaction)
+
+    def commit(self):
+        self._cursor("commit")
+        # self.db_cursor_class.commit()
+
+    def rollback(self):
+        self._cursor("rollback")
+        # self.db_cursor_class.rollback()
+
     def raw_insert(self, table_name="", record={}):
         """insert dictionary into table"""
         if not (table_name and record):
