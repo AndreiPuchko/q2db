@@ -135,6 +135,7 @@ class Q2Db:
             database_name=self.database_name,
             port=self.port,
         )
+        self.set_schema(Q2DbSchema())
 
     def create(self):
         """
