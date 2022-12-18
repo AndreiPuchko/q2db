@@ -39,7 +39,7 @@ class Q2Cursor:
         self._rows = {}
         self._columns = []
         self._row_count = 0
-        self._currentRow = 0
+        self._current_row = 0
         self.refresh()
         self.r = Record(self)
         self.tick_callback = None
@@ -163,10 +163,10 @@ class Q2Cursor:
         return {}
 
     def current_row(self):
-        return self._currentRow
+        return self._current_row
 
     def first(self):
-        self._currentRow = 0
+        self._current_row = 0
 
     def last(self):
         self.set_current_row(self.row_count() - 1)
@@ -180,23 +180,23 @@ class Q2Cursor:
     def set_current_row(self, current_row):
         if current_row >= 0:
             if current_row < self.row_count():
-                self._currentRow = current_row
+                self._current_row = current_row
             else:
                 self.last()
         else:
-            self._currentRow = 0
+            self._current_row = 0
 
     def eof(self):
-        return self._currentRow == self._row_count - 1
+        return self._current_row == self._row_count - 1
 
     def bof(self):
-        return self._currentRow == 0
+        return self._current_row == 0
 
-    def get_prymary_key_row(self, dataDic):
-        pkName = [x for x in self.primary_key_columns][0]
-        pkValue = str(dataDic[pkName])
+    def seek_primary_key_row(self, dataDic):
+        pk_name = [x for x in self.primary_key_columns][0]
+        pk_value = str(dataDic[pk_name])
         for x in range(self.row_count()):
-            if self.record(x)[pkName] == pkValue:
+            if self.record(x)[pk_name] == pk_value:
                 return x
 
     def seek_row(self, data_dic):
@@ -210,8 +210,15 @@ class Q2Cursor:
     def get_primary_key_columns(self):
         return self.primary_key_columns[:]
 
+    def get_next_value(self, column, value):
+        return self.q2_db.get_next_value(
+            self.table_name,
+            column,
+            value,
+        )
+
     def refresh(self):
-        self._currentRow = 0
+        self._current_row = 0
         if self.table_name:
             self.primary_key_columns = [x for x in self.q2_db.get_primary_key_columns(self.table_name)]
             self.sql = f"select * from {self.table_name}"
@@ -231,7 +238,7 @@ class Q2Cursor:
 
     def records(self):
         for x in range(self._row_count):
-            self._currentRow = x
+            self._current_row = x
             yield self.record(x)
 
     def record(self, rowNumber, columns=[]):

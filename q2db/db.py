@@ -385,9 +385,9 @@ class Q2Db:
             self.create_index(column_definition)
 
             log_column_definition = dict(column_definition)
-            log_column_definition["pk"] = None
-            log_column_definition["ai"] = None
-            log_column_definition["uk"] = None
+            log_column_definition["pk"] = ""
+            log_column_definition["ai"] = ""
+            log_column_definition["uk"] = ""
             log_column_definition["table"] = "log_" + log_column_definition["table"]
             self.create_column(log_column_definition)
         return True
@@ -524,32 +524,32 @@ class Q2Db:
                     aipk = d
 
         columns_list = [x for x in record if x in table_columns]
-        if not aipk:
-            # create primary key value
-            for x in primary_key_columns:
-                if x not in columns_list:
-                    columns_list.append(x)
-                is_string_data = True if ("char" in primary_key_columns[x]["datatype"]) else False
-                if is_string_data:
-                    primary_key_value = record.get(x, "")
-                else:
-                    primary_key_value = int_(record.get(x, 0))
-                while (
-                    self.cursor(
-                        sql=f"""select {self.escape_char}{x}{self.escape_char}
-                                from {table_name}
-                                where {self.escape_char}{x}{self.escape_char}='{primary_key_value}'
-                            """
-                    ).row_count()
-                    > 0
-                ):
+        if not table_name.upper().startswith("LOG_"):
+            if not aipk:
+                # create primary key value
+                for x in primary_key_columns:
+                    if x not in columns_list:
+                        columns_list.append(x)
+                    is_string_data = True if ("char" in primary_key_columns[x]["datatype"]) else False
                     if is_string_data:
-                        primary_key_value += "_"
+                        primary_key_value = record.get(x, "")
                     else:
-                        primary_key_value += 1
-                record[x] = primary_key_value
-        else:  # autoincrement
-            if not table_name.upper().startswith("LOG_"):
+                        primary_key_value = int_(record.get(x, 0))
+                    while (
+                        self.cursor(
+                            sql=f"""select {self.escape_char}{x}{self.escape_char}
+                                    from {table_name}
+                                    where {self.escape_char}{x}{self.escape_char}='{primary_key_value}'
+                                """
+                        ).row_count()
+                        > 0
+                    ):
+                        if is_string_data:
+                            primary_key_value += "."
+                        else:
+                            primary_key_value += 1
+                    record[x] = primary_key_value
+            else:  # autoincrement
                 for pkname in primary_key_columns:
                     if pkname in record:
                         del record[pkname]
@@ -708,6 +708,18 @@ class Q2Db:
                 else:
                     return row[0]["ret"]
         return {}
+
+    def get_next_value(self, table_name, column, value):
+        datatype = self.db_schema.get_schema_attr(table_name, column)["datatype"]
+        if "int" in datatype or "dec" in datatype or "num" in datatype:
+            return self.cursor(f"""select min({column}) +1 as pkvalue
+                            from {table_name}
+                            where {column} >= {value}
+                                and {column}+1 not in
+                                    (select {column} from {table_name})
+                        """).r.pkvalue
+        else:
+            return value + "."
 
     def _dict_factory(self, cursor, row, sql):
         return {
