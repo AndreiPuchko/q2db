@@ -518,7 +518,7 @@ class Q2Db:
         primary_key_columns = self.get_primary_key_columns(table_name)
 
         aipk = ""
-        if len(primary_key_columns) == 1:
+        if not table_name.upper().startswith("LOG_") and len(primary_key_columns) == 1:
             for d in primary_key_columns:
                 if primary_key_columns[d].get("ai"):
                     aipk = d
@@ -634,7 +634,7 @@ class Q2Db:
                 return False
             else:
                 if not table_name.upper().startswith("LOG_") and table_name.upper() != "PLATFORM":
-                    self.insert("log_" + table_name, record)
+                    self.insert("log_" + table_name, dict(record))
                 return True
         else:
             self.last_sql_error = "Update requires a primary key column!"
