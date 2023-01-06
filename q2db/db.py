@@ -306,6 +306,7 @@ class Q2Db:
         # schema_columns["insert_session_id"] = {"datatype": "int"}
         # schema_columns["update_session_id"] = {"datatype": "int"}
         # schema_columns["user_lock"] = {"datatype": "char", "datalen": 1}
+        pass
 
     def create_column(self, column_definition):
         """migrate given 'column_definition' to database"""
@@ -408,9 +409,8 @@ class Q2Db:
     def run_migrate_sql(self, sql_cmd):
         self._cursor(sql_cmd)
         # if 'Group' in sql_cmd:
-        #     print(sql_cmd)
         if self.last_sql_error != "":
-            self.migrate_error_list.append(self.last_sql_error)
+            self.migrate_error_list.append(f"{self.last_sql_error}: {sql_cmd}")
             return False
         return True
 
@@ -451,11 +451,9 @@ class Q2Db:
 
     def commit(self):
         self._cursor("commit")
-        # self.db_cursor_class.commit()
 
     def rollback(self):
         self._cursor("rollback")
-        # self.db_cursor_class.rollback()
 
     def raw_insert(self, table_name="", record={}):
         """insert dictionary into table"""
@@ -483,7 +481,9 @@ class Q2Db:
             return True
 
     def insert(self, table_name="", record={}):
-        """insert dictionary into table"""
+        """
+        insert dictionary into table
+        """
         if not (table_name and record):
             return None
 
