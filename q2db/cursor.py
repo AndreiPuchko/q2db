@@ -210,11 +210,11 @@ class Q2Cursor:
     def get_primary_key_columns(self):
         return self.primary_key_columns[:]
 
-    def get_next_value(self, column, value):
-        return self.q2_db.get_next_value(
+    def get_uniq_value(self, column, start_value):
+        return self.q2_db.get_uniq_value(
             self.table_name,
             column,
-            value,
+            start_value,
         )
 
     def refresh(self):

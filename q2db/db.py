@@ -709,17 +709,17 @@ class Q2Db:
                     return row[0]["ret"]
         return {}
 
-    def get_next_value(self, table_name, column, value):
+    def get_uniq_value(self, table_name, column, start_value):
         datatype = self.db_schema.get_schema_attr(table_name, column)["datatype"]
         if "int" in datatype or "dec" in datatype or "num" in datatype:
             return self.cursor(f"""select min({column}) +1 as pkvalue
                             from {table_name}
-                            where {column} >= {value}
+                            where {column} >= {start_value}
                                 and {column}+1 not in
                                     (select {column} from {table_name})
                         """).r.pkvalue
         else:
-            return value + "."
+            return start_value + "."
 
     def _dict_factory(self, cursor, row, sql):
         return {
