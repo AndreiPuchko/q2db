@@ -459,19 +459,21 @@ class Q2Db:
         """insert dictionary into table"""
         if not (table_name and record):
             return None
-
+        table_columns = self.get_database_columns(table_name[:])
         sql = (
             f"insert into {table_name} ("
-            + ",".join([f"{self.escape_char}{x}{self.escape_char}" for x in record.keys()])
+            + ",".join(
+                [f"{self.escape_char}{x}{self.escape_char}" for x in record.keys() if x in table_columns]
+            )
             + ") values ("
-            + ",".join(["%s" for x in record.keys()])
+            + ",".join(["%s" for x in record.keys() if x in table_columns])
             + ")"
         )
 
         if self.db_engine_name == "sqlite3":
             sql = sql.replace("%s", "?")
 
-        data = [record[x] for x in record.keys()]
+        data = [record[x] for x in record.keys() if x in table_columns]
 
         self._cursor(sql, data)
 
@@ -712,12 +714,14 @@ class Q2Db:
     def get_uniq_value(self, table_name, column, start_value):
         datatype = self.db_schema.get_schema_attr(table_name, column)["datatype"]
         if "int" in datatype or "dec" in datatype or "num" in datatype:
-            return self.cursor(f"""select min({column}) +1 as pkvalue
+            return self.cursor(
+                f"""select min({column}) +1 as pkvalue
                             from {table_name}
                             where {column} >= {start_value}
                                 and {column}+1 not in
                                     (select {column} from {table_name})
-                        """).r.pkvalue
+                        """
+            ).r.pkvalue
         else:
             return start_value + "."
 
@@ -744,7 +748,7 @@ class Q2Db:
                     _rows[i] = self._dict_factory(_work_cursor, x, sql)
                     i += 1
         except self.db_api_engine.Error as err:
-            self.last_sql_error = {err}
+            self.last_sql_error = str(err)
             self.last_sql = sql
             self.last_record = "!".join([f"{x}" for x in data])
             _rows = {0: {}}
