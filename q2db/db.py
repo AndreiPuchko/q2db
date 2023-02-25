@@ -457,7 +457,7 @@ class Q2Db:
 
     def raw_insert(self, table_name="", record={}):
         """insert dictionary into table"""
-        if not (table_name and record):
+        if not (table_name or record):
             return None
         table_columns = self.get_database_columns(table_name[:])
         sql = (
@@ -474,6 +474,10 @@ class Q2Db:
             sql = sql.replace("%s", "?")
 
         data = [record[x] for x in record.keys() if x in table_columns]
+
+        if not data:
+            self.last_sql_error = f"no data to insert into table '{table_name}'"
+            return False
 
         self._cursor(sql, data)
 
@@ -571,6 +575,11 @@ class Q2Db:
         self._check_record_for_numbers(table_name, record)
         data = [record[x] for x in columns_list]
         # print(sql, data)
+
+        if not data:
+            self.last_sql_error = f"no data to insert into table '{table_name}'"
+            return False
+
         self._cursor(sql, data)
 
         if self.last_sql_error:
@@ -748,7 +757,7 @@ class Q2Db:
                     _rows[i] = self._dict_factory(_work_cursor, x, sql)
                     i += 1
         except self.db_api_engine.Error as err:
-            self.last_sql_error = str(err)
+            self.last_sql_error = str(err) + "> " + sql
             self.last_sql = sql
             self.last_record = "!".join([f"{x}" for x in data])
             _rows = {0: {}}
