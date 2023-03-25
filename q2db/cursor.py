@@ -29,6 +29,7 @@ class Record:
 class Q2Cursor:
     def __init__(self, q2_db, sql, table_name="", order="", where="", data=[], cache_flag=False):
         self.q2_db = q2_db
+        self.ec = self.q2_db.ec
         self.sql = sql
         self.table_name = table_name
         self.order = order
@@ -90,7 +91,7 @@ class Q2Cursor:
         if self.table_name:
             f = "".join(self.primary_key_columns)
             f += f",{column}" if column not in self.primary_key_columns else ""
-            sql = f"select {f} from {self.table_name} where "
+            sql = f"select {f} from {self.ec}{self.table_name}{self.ec} where "
             if self.where:
                 sql += f" {self.where} and "
             sql += f" ({self.prepare_column_search(column,text)}) "
@@ -221,7 +222,7 @@ class Q2Cursor:
         self._current_row = 0
         if self.table_name:
             self.primary_key_columns = [x for x in self.q2_db.get_primary_key_columns(self.table_name)]
-            self.sql = f"select * from {self.table_name}"
+            self.sql = f"select * from {self.ec}{self.table_name}{self.ec}"
             if self.where:
                 self.sql += f" where {self.where}"
             if self.order:
@@ -257,12 +258,12 @@ class Q2Cursor:
         if self.table_name:
             sql = f"""
             select min({column}+1) as seq
-            from {self.table_name}
+            from {self.ec}{self.table_name}{self.ec}
             where {column} >={start_value}
                 and {column}+1 not in
                     (
                     select {column}
-                    from {self.table_name}
+                    from {self.ec}{self.table_name}{self.ec}
                     {'where' if self.where else '' } {self.where}
                     )
                 {'and' if self.where else '' } {self.where}

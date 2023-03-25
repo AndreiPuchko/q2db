@@ -20,9 +20,9 @@ if __name__ == "__main__":
     sys.path.insert(0, ".")
 
     # from demo.demo_mysql import demo
-    from demo.demo_postgresql import demo
+    # from demo.demo_postgresql import demo
 
-    # from demo.demo_sqlite import demo
+    from demo.demo_sqlite import demo
 
     demo()
     # from temp.try_pg_01 import demo
@@ -54,6 +54,7 @@ class Q2Db:
         port=None,
         guest_mode=False,
         url=None,
+        get_admin_credential_callback=None,
     ):
         """
         :param url: 'sqlite3|mysql|postgresql://username:password@host:port/database'
@@ -65,6 +66,8 @@ class Q2Db:
         :param database_name='', if empty and db_engine_name == 'sqlite' - ':memory:'
         :param port:''
         :param guest_mode:, if empty - False
+        :param get_admin_credential_callback: function that gets db name, host and port
+            and returns (user, password)
         """
         self.url = url
         self.guest_mode = guest_mode
@@ -76,14 +79,16 @@ class Q2Db:
                 if database_name is None:
                     database_name = ":memory:"
             self.db_engine_name = db_engine_name
+            if self.db_engine_name == "sqlite":
+                self.db_engine_name = "sqlite3"
             self.user = user
             self.password = password
             self.host = host
             self.database_name = database_name
-            self.port = port
+            self.port = int_(port)
 
             self.connection = None
-
+        self.get_admin_credential_callback = get_admin_credential_callback
         if self.db_engine_name not in ["mysql", "sqlite3", "postgresql"]:
             raise Exception(f"Sorry, wrong DBAPI engine - {self.db_engine_name}")
 
@@ -95,7 +100,7 @@ class Q2Db:
 
         self.db_schema = None
         self.connection = None
-        self.escape_char = '"'
+        self.ec = '"'
 
         if self.db_engine_name == "mysql":
             try:
@@ -103,7 +108,7 @@ class Q2Db:
 
                 self.db_api_engine = db_mysql_connector
                 self.db_cursor_class = Q2MysqlCursor
-                self.escape_char = "`"
+                self.ec = "`"
             except Exception:
                 raise Exception(
                     "Sorry, can not import mysql.connector - use: pip install mysql-connector-python"
@@ -137,27 +142,38 @@ class Q2Db:
         )
         self.set_schema(Q2DbSchema())
 
+    def get_admin_credential_callback(self, database, dbengine, host, port):
+        pass
+
     def create(self):
         """
         Take chance to create database
         """
         admin_database_name = {"mysql": "mysql", "postgresql": "postgres"}[self.db_engine_name]
+        admin_database_user = {"mysql": "root", "postgresql": "postgres"}[self.db_engine_name]
+        root_user, root_password = self.get_admin_credential_callback(
+            self.database_name, self.db_engine_name, self.host, self.port, admin_database_user
+        )
         try:
             self.connection = self.connect(
-                user=self.user,
-                password=self.password,
+                user=root_user,
+                password=root_password,
                 host=self.host,
                 database_name=admin_database_name,
                 port=self.port,
             )
         except Exception:
             print(sys.exc_info())
+            return False
         if self.db_engine_name == "mysql":
+            self._cursor(sql=f"CREATE USER IF NOT EXISTS '{self.user}' IDENTIFIED BY '{self.password}'")
             self._cursor(sql=f"CREATE DATABASE IF NOT EXISTS {self.database_name}")
             self._cursor(sql=f"GRANT ALL PRIVILEGES ON {self.database_name}.* TO '{self.user}'")
+
         elif self.db_engine_name == "postgresql":
+            self._cursor(sql=f"CREATE USER {self.user} WITH PASSWORD  '{self.password}'")
             self._cursor(sql=f"CREATE DATABASE {self.database_name} WITH OWNER = {self.user}")
-            self._cursor(sql=f"GRANT ALL PRIVILEGES ON DATABASE {self.database_name}.* TO {self.user}")
+            self._cursor(sql=f"GRANT ALL PRIVILEGES ON DATABASE {self.database_name} TO {self.user}")
         self.connection.close()
         return True
 
@@ -340,18 +356,21 @@ class Q2Db:
                 "({datalen})".format(**column_definition) if column_definition["datalen"] else ""
             )
         elif "DATE" in datatype:
-            column_definition["default"] = "DEFAULT '0000-00-00'"
+            # column_definition["default"] = "DEFAULT '0000-00-00'"
+            column_definition["default"] = ""
             column_definition["size"] = ""
         elif "TEXT" in datatype:
             column_definition["default"] = ""
             column_definition["size"] = ""
+            if self.db_engine_name == "postgresql":
+                column_definition["datatype"] = "TEXT"
         else:
             column_definition["size"] = ""
             column_definition["default"] = ""
 
         _column_definition = dict(column_definition)
 
-        _column_definition["escape_char"] = self.escape_char
+        _column_definition["escape_char"] = self.ec
 
         _column_definition["autoincrement"] = ""
         if _column_definition.get("ai"):
@@ -375,10 +394,9 @@ class Q2Db:
         table = column_definition["table"]
 
         if table in self.get_tables(table):
-            sql_cmd = f"ALTER TABLE {table} ADD {sql_column_text}"
+            sql_cmd = f"ALTER TABLE {self.ec}{table}{self.ec} ADD {sql_column_text}"
         else:
-            sql_cmd = f"CREATE TABLE {table} ({sql_column_text})"
-
+            sql_cmd = f"CREATE TABLE {self.ec}{table}{self.ec} ({sql_column_text})"
         if not self.run_migrate_sql(sql_cmd):
             return False
 
@@ -403,7 +421,13 @@ class Q2Db:
             or column_definition.get("column") == "date"
             or column_definition.get("to_table")
         ):
-            sql_cmd = "CREATE INDEX {table}_{column} on {table} ({column})".format(**column_definition)
+            column_definition["escape_char"] = self.ec
+            sql_cmd = (
+                "CREATE INDEX {escape_char}{table}_{column}{escape_char} ".format(**column_definition)
+                + " on {escape_char}{table}{escape_char} ".format(**column_definition)
+                + " ({escape_char}{column}{escape_char})".format(**column_definition)
+            )
+
             self.run_migrate_sql(sql_cmd)
 
     def run_migrate_sql(self, sql_cmd):
@@ -419,9 +443,13 @@ class Q2Db:
             return
         indexes = self.db_schema.get_schema_indexes()
         for x in indexes:
+            x["escape_char"] = self.ec
             if not x.get("name"):
                 x["name"] = re.sub(r"[^\w\d]+", "_", x["expression"])
-            sql_cmd = "CREATE INDEX {table}_{name} on {table} ({expression})".format(**x)
+            sql_cmd = (
+                "CREATE INDEX {escape_char}{table}_{name}{escape_char} "
+                " on {escape_char}{table}{escape_char} ({expression})"
+            ).format(**x)
             self.run_migrate_sql(sql_cmd)
 
     def _sqlite_patch(self, sql, record, table_columns):
@@ -461,10 +489,8 @@ class Q2Db:
             return None
         table_columns = self.get_database_columns(table_name[:])
         sql = (
-            f"insert into {table_name} ("
-            + ",".join(
-                [f"{self.escape_char}{x}{self.escape_char}" for x in record.keys() if x in table_columns]
-            )
+            f"insert into {self.ec}{table_name}{self.ec} ("
+            + ",".join([f"{self.ec}{x}{self.ec}" for x in record.keys() if x in table_columns])
             + ") values ("
             + ",".join(["%s" for x in record.keys() if x in table_columns])
             + ")"
@@ -499,7 +525,7 @@ class Q2Db:
             # check foreign keys
             foreign_keys_list = self.db_schema.get_primary_tables(table_name, record)
             for x in foreign_keys_list:
-                x["escape_char"] = self.escape_char
+                x["escape_char"] = self.ec
                 if (
                     self.get(
                         x["primary_table"],
@@ -510,7 +536,7 @@ class Q2Db:
                 ):
                     self.last_sql_error = (
                         "Foreign key error for insert:"
-                        + f" For {self.escape_char}{table_name}{self.escape_char}"
+                        + f" For {self.ec}{table_name}{self.ec}"
                         + ".{escape_char}{child_column}{escape_char}".format(**x)
                         + " not found value '{child_value}' ".format(**x)
                         + "in table "
@@ -543,9 +569,9 @@ class Q2Db:
                         primary_key_value = int_(record.get(x, 0))
                     while (
                         self.cursor(
-                            sql=f"""select {self.escape_char}{x}{self.escape_char}
-                                    from {table_name}
-                                    where {self.escape_char}{x}{self.escape_char}='{primary_key_value}'
+                            sql=f"""select {self.ec}{x}{self.ec}
+                                    from {self.ec}{table_name}{self.ec}
+                                    where {self.ec}{x}{self.ec}='{primary_key_value}'
                                 """
                         ).row_count()
                         > 0
@@ -562,8 +588,8 @@ class Q2Db:
                         columns_list.pop(columns_list.index(pkname))
 
         sql = (
-            f"insert into {table_name} ("
-            + ",".join([f"{self.escape_char}{x}{self.escape_char}" for x in columns_list])
+            f"insert into {self.ec}{table_name}{self.ec} ("
+            + ",".join([f"{self.ec}{x}{self.ec}" for x in columns_list])
             + ") values ("
             + ",".join(["%s" for x in columns_list])
             + ")"
@@ -574,7 +600,6 @@ class Q2Db:
 
         self._check_record_for_numbers(table_name, record)
         data = [record[x] for x in columns_list]
-        # print(sql, data)
 
         if not data:
             self.last_sql_error = f"no data to insert into table '{table_name}'"
@@ -622,16 +647,14 @@ class Q2Db:
 
         columns_list = [x for x in record if x in table_columns]
         if is_sub_list(primary_key_columns.keys(), record.keys()):
-            sql = f"update {table_name} set " + ",".join(
+            sql = f"update {self.ec}{table_name}{self.ec} set " + ",".join(
                 [
-                    f" {self.escape_char}{x}{self.escape_char}=%s "
+                    f" {self.ec}{x}{self.ec}=%s "
                     for x in record
                     if x not in primary_key_columns and x in columns_list
                 ]
             )
-            sql += " where " + " and ".join(
-                [f" {self.escape_char}{x}{self.escape_char} = %s " for x in primary_key_columns]
-            )
+            sql += " where " + " and ".join([f" {self.ec}{x}{self.ec} = %s " for x in primary_key_columns])
             if self.db_engine_name == "sqlite3":
                 sql = self._sqlite_patch(sql, record, table_columns)
 
@@ -655,9 +678,9 @@ class Q2Db:
             return None
         self.last_error_data = {}
         for x in self.db_schema.get_child_tables(table_name, record):
-            x["escape_char"] = self.escape_char
+            x["escape_char"] = self.ec
             rez = self._cursor(
-                """select 1 from {child_table}
+                """select 1 from {escape_char}{child_table}{escape_char}
                     where {escape_char}{child_column}{escape_char}='{parent_value}'""".format(
                     **x
                 )
@@ -665,7 +688,7 @@ class Q2Db:
             if {} != rez:
                 self.last_sql_error = (
                     "Foreign key error for delete:"
-                    + f" Row in {self.escape_char}{table_name}{self.escape_char}"
+                    + f" Row in {self.ec}{table_name}{self.ec}"
                     + ".{escape_char}{parent_column}{escape_char}".format(**x)
                     + "={parent_value}".format(**x)
                     + " can not to be deleted, because "
@@ -680,10 +703,10 @@ class Q2Db:
             columns_list = [x for x in record if x in primary_key_columns]
         else:
             columns_list = [x for x in record if x in table_columns]
-        where_clause = " and ".join([f"{self.escape_char}{x}{self.escape_char} = %s " for x in columns_list])
+        where_clause = " and ".join([f"{self.ec}{x}{self.ec} = %s " for x in columns_list])
         data = [record[x] for x in columns_list]
 
-        select_sql = f"select * from {table_name} where {where_clause}"
+        select_sql = f"select * from {self.ec}{table_name}{self.ec} where {where_clause}"
         if self.db_engine_name == "sqlite3":
             select_sql = self._sqlite_patch(select_sql, record, table_columns)
 
@@ -724,11 +747,11 @@ class Q2Db:
         datatype = self.db_schema.get_schema_attr(table_name, column)["datatype"]
         if "int" in datatype or "dec" in datatype or "num" in datatype:
             return self.cursor(
-                f"""select min({column}) +1 as pkvalue
-                            from {table_name}
-                            where {column} >= {start_value}
-                                and {column}+1 not in
-                                    (select {column} from {table_name})
+                f"""select min({self.ec}{column}{self.ec}) +1 as pkvalue
+                            from {self.ec}{table_name}{self.ec}
+                            where {self.ec}{column}{self.ec} >= {start_value}
+                                and {self.ec}{column}{self.ec} + 1 not in
+                                    (select {self.ec}{column}{self.ec} from {self.ec}{table_name}{self.ec})
                         """
             ).r.pkvalue
         else:
@@ -745,6 +768,8 @@ class Q2Db:
         self.last_sql = ""
         self.last_record = ""
         _rows = {}
+        if self.db_engine_name == "postgresql":
+            sql = sql.replace("`", '"')
         try:
             _work_cursor = self.connection.cursor()
             if data:
