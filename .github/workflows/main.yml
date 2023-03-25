@@ -29,8 +29,8 @@ jobs:
         python -m ensurepip
         python -m pip install --upgrade pip
         python -m pip install poetry==${{ matrix.poetry-version }}
-    - name: View poetry --help
-      run: poetry --help
+#    - name: View poetry --help
+#      run: poetry --help
 
     - name: run docker-compose
       shell: bash
