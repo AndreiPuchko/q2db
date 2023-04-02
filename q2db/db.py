@@ -55,6 +55,7 @@ class Q2Db:
         guest_mode=False,
         url=None,
         get_admin_credential_callback=None,
+        create_only=None,
     ):
         """
         :param url: 'sqlite3|mysql|postgresql://username:password@host:port/database'
@@ -124,13 +125,19 @@ class Q2Db:
         elif self.db_engine_name == "sqlite3":
             self.db_api_engine = db_sqlite_connector
             self.db_cursor_class = Q2SqliteCursor
-        try:
-            self._connect()
+
+        if create_only:
+            self.create()
             return
-        except Exception:
-            pass  # Do nothing - give chance to screate database!
-        self.create()
-        self._connect()
+        else:
+            try:
+                self._connect()
+                return
+            except Exception:
+                pass  # Do nothing - give chance to screate database!
+
+        if self.create():
+            self._connect()
 
     def _connect(self):
         self.connection = self.connect(
@@ -145,26 +152,36 @@ class Q2Db:
     def get_admin_credential_callback(self, database, dbengine, host, port):
         pass
 
+    @staticmethod
+    def get_system_database_name(db_engine_name):
+        return {"mysql": "mysql", "postgresql": "postgres"}[db_engine_name]
+
+    @staticmethod
+    def get_default_admin_name(db_engine_name):
+        return {"mysql": "root", "postgresql": "postgres"}.get(db_engine_name, None)
+
     def create(self):
         """
         Take chance to create database
         """
-        admin_database_name = {"mysql": "mysql", "postgresql": "postgres"}[self.db_engine_name]
-        admin_database_user = {"mysql": "root", "postgresql": "postgres"}[self.db_engine_name]
-        root_user, root_password = self.get_admin_credential_callback(
-            self.database_name, self.db_engine_name, self.host, self.port, admin_database_user
-        )
-        try:
-            self.connection = self.connect(
-                user=root_user,
-                password=root_password,
-                host=self.host,
-                database_name=admin_database_name,
-                port=self.port,
+        admin_database_name = Q2Db.get_system_database_name(self.db_engine_name)
+        admin_database_user = Q2Db.get_default_admin_name(self.db_engine_name)
+        # admin_database_name = {"mysql": "mysql", "postgresql": "postgres"}[self.db_engine_name]
+        # admin_database_user = {"mysql": "root", "postgresql": "postgres"}[self.db_engine_name]
+
+        if self.get_admin_credential_callback:
+            root_user, root_password = self.get_admin_credential_callback(
+                self.database_name, self.db_engine_name, self.host, self.port, admin_database_user
             )
-        except Exception:
-            print(sys.exc_info())
-            return False
+        else:
+            root_user, root_password = self.user, self.password
+        self.connection = self.connect(
+            user=root_user,
+            password=root_password,
+            host=self.host,
+            database_name=admin_database_name,
+            port=self.port,
+        )
         if self.db_engine_name == "mysql":
             self._cursor(sql=f"CREATE USER IF NOT EXISTS '{self.user}' IDENTIFIED BY '{self.password}'")
             self._cursor(sql=f"CREATE DATABASE IF NOT EXISTS {self.database_name}")
