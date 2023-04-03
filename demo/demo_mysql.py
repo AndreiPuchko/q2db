@@ -11,7 +11,7 @@ from q2db.db import Q2Db
 
 def demo():
     demo_database = Q2Db(
-        "mysql", database_name="q2test", host="0.0.0.0", port="3308", user="root", password="q2test"
+        "mysql", database_name="q2test", host="localhost", port="3308", user="root", password="q2test"
     )
     demo_basic(demo_database)
 

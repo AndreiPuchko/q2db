@@ -13,8 +13,8 @@ def demo():
     demo_database = Q2Db(
         "postgresql",
         database_name="q2test2",
-        host="0.0.0.0",
-        port=5432,
+        host="localhost",
+        port=6432,
         user="q2user",
         password="q2test",
     )

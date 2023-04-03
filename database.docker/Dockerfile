@@ -1,4 +1,4 @@
-FROM python:3.6
+FROM python
 RUN git clone https://github.com/AndreiPuchko/q2db
 RUN python -m pip install --upgrade pip
 RUN pip install q2db

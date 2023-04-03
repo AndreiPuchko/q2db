@@ -13,11 +13,11 @@ services:
       MYSQL_PASSWORD: q2test
       MYSQL_DATABASE: test
   postgres:
-    image: postgres:13.3
+    image: postgres
     container_name: postgressql_q2db_test
     restart: on-failure
     ports:
-      - "5432:5432"
+      - "6432:5432"
     environment:
       POSTGRES_USER: "q2user"
       POSTGRES_PASSWORD: "q2test"

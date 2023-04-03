@@ -137,8 +137,8 @@ def test_postgresql():
     database = Q2Db(
         "postgresql",
         database_name="q2test",
-        host="0.0.0.0",
-        port=5432,
+        host="localhost",
+        port=6432,
         user="q2user",
         password="q2test",
     )
@@ -150,7 +150,7 @@ def test_postgresql():
 
 def test_mysql():
     print("mysql start")
-    database = Q2Db(url="mysql://root:q2test@0.0.0.0:3308/q2test")
+    database = Q2Db(url="mysql://root:q2test@localhost:3308/q2test")
 
     _all_tests(database)
     print("mysql done")
