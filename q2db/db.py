@@ -56,6 +56,8 @@ class Q2Db:
         url=None,
         get_admin_credential_callback=None,
         create_only=None,
+        root_user=None,
+        root_password=None
     ):
         """
         :param url: 'sqlite3|mysql|postgresql://username:password@host:port/database'
@@ -84,6 +86,8 @@ class Q2Db:
                 self.db_engine_name = "sqlite3"
             self.user = user
             self.password = password
+            self.root_user = root_user
+            self.root_password = root_password
             self.host = host
             self.database_name = database_name
             self.port = int_(port)
@@ -174,7 +178,7 @@ class Q2Db:
                 self.database_name, self.db_engine_name, self.host, self.port, admin_database_user
             )
         else:
-            root_user, root_password = self.user, self.password
+            root_user, root_password = self.root_user, self.root_password
         self.connection = self.connect(
             user=root_user,
             password=root_password,
