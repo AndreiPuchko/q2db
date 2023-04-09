@@ -86,13 +86,13 @@ class Q2Db:
                 self.db_engine_name = "sqlite3"
             self.user = user
             self.password = password
-            self.root_user = root_user
-            self.root_password = root_password
             self.host = host
             self.database_name = database_name
             self.port = int_(port)
 
-            self.connection = None
+        self.root_user = root_user
+        self.root_password = root_password
+        self.connection = None
         self.get_admin_credential_callback = get_admin_credential_callback
         if self.db_engine_name not in ["mysql", "sqlite3", "postgresql"]:
             raise Exception(f"Sorry, wrong DBAPI engine - {self.db_engine_name}")
