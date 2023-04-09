@@ -53,7 +53,7 @@ def demo(demo_database: Q2Db):
     demo_database.insert("topic_table", {"name": "3" * 50})
 
     # return
-     
+
     print_cursor(demo_database.cursor(table_name="topic_table"))
     print("update row - uid=2")
     demo_database.update("topic_table", {"uid": "2", "name": "------------"})

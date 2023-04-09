@@ -18,6 +18,35 @@ from datetime import datetime
 from q2db.utils import num
 
 
+class lazy_rows(dict):
+    def __init__(self, value, cursor):
+        super().__init__(value)
+        self.cursor: Q2Cursor = cursor
+        self.pk = self.cursor.primary_key_columns[0]
+        self.column_count = 1
+        self.fetch_row(0)
+
+    def fetch_row(self, row_number):
+        if row_number not in self:
+            return {}
+        pk_value = super().__getitem__(row_number).get(self.pk)
+        sql = (
+            f"select * from {self.cursor.ec}{self.cursor.table_name}{self.cursor.ec} "
+            f" where {self.cursor.ec}{self.pk}{self.cursor.ec} = '{pk_value}'"
+        )
+        row = self.cursor.q2_db._cursor(f"{sql}").get(0)
+        super().__getitem__(row_number).update(row)
+        if row_number == 0:
+            self.column_count = len(row)
+        return row
+
+    def __getitem__(self, __key):
+        row = super().__getitem__(__key)
+        if len(row) < self.column_count:
+            row = self.fetch_row(__key)
+        return row
+
+
 class Record:
     def __init__(self, t):
         self.t = t
@@ -227,7 +256,15 @@ class Q2Cursor:
                 self.sql += f" where {self.where}"
             if self.order:
                 self.sql += f" order by {self.order}"
-        self._rows = self.q2_db._cursor(f"""{self.sql}""", self.data)
+
+        if self.table_name and self.primary_key_columns:
+            pk = self.primary_key_columns[0]
+            self._rows = lazy_rows(
+                self.q2_db._cursor(f"{self.sql.replace(' * ', ' '+pk+ ' ')}", self.data), self
+            )
+        else:
+            self._rows = self.q2_db._cursor(f"""{self.sql}""", self.data)
+
         if self.q2_db.last_sql_error or self._rows == {}:
             self._row_count = -1
         else:
@@ -242,12 +279,12 @@ class Q2Cursor:
             self._current_row = x
             yield self.record(x)
 
-    def record(self, rowNumber, columns=[]):
-        if rowNumber in self._rows:
+    def record(self, row_number, columns=[]):
+        if row_number in self._rows:
             if columns:
-                return {x: self._rows[rowNumber][x] for x in self._rows[rowNumber] if x in columns}
+                return {x: self._rows[row_number][x] for x in self._rows[row_number] if x in columns}
             else:
-                return self._rows[rowNumber]
+                return self._rows[row_number]
         else:
             return {}
 
