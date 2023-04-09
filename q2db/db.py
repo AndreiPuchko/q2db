@@ -19,10 +19,10 @@ if __name__ == "__main__":
 
     sys.path.insert(0, ".")
 
-    # from demo.demo_mysql import demo
+    from demo.demo_mysql import demo
     # from demo.demo_postgresql import demo
 
-    from demo.demo_sqlite import demo
+    # from demo.demo_sqlite import demo
 
     demo()
     # from temp.try_pg_01 import demo
@@ -178,7 +178,8 @@ class Q2Db:
                 self.database_name, self.db_engine_name, self.host, self.port, admin_database_user
             )
         else:
-            root_user, root_password = self.root_user, self.root_password
+            root_user = self.root_user if self.root_user else self.user
+            root_password = self.root_password if self.root_password else self.password
         self.connection = self.connect(
             user=root_user,
             password=root_password,
