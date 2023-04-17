@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "q2db"
-version = "0.1.22"
+version = "0.1.23"
 description = "python DB API wrapper (MySQL, PostgreSQL, SQLite)"
 authors = ["Andrei Puchko <andrei.puchko@gmx.de>"]
 license = "Apache 2.0"
@@ -10,7 +10,7 @@ readme = "README.md"
 line-length = 110
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = ">=3.8.1"
 mysql-connector-python = "^8.0.29"
 psycopg2-binary = "^2.9.3"
 
