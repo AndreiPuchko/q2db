@@ -1,4 +1,4 @@
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import sys
 
     if "." not in sys.path:
@@ -6,12 +6,16 @@ if __name__ == "__main__":
 
 
 from q2db.schema import Q2DbSchema
+from unittest.mock import patch, mock_open
 
 
 def test_schema():
     # empty schema
     schema = Q2DbSchema()
     assert schema.schema == {"tables": {}, "indexes": {}}
+    # wrong calls
+    schema.add()
+    schema.add({"column": ""})
     # add first column
     schema.add(table="topic_table", column="uid", datatype="int", datalen=9, pk=True)
     assert schema.schema == {
@@ -76,8 +80,23 @@ def test_schema():
     ]
 
     schema.add_index("message_table", "info, uid")
-    assert len(schema.get_schema_indexes()) == 1 
+    assert len(schema.get_schema_indexes()) == 1
+    schema.get_schema_tables()
+    schema.get_schema_columns()
+    schema.get_schema_attr()
+    assert schema.get_primary_tables("message_table", {"parent_uid": 22}) == [
+        {
+            "primary_table": "topic_table",
+            "primary_column": "uid",
+            "child_column": "parent_uid",
+            "child_value": 22,
+        }
+    ]
+    with patch("builtins.open", mock_open(read_data='[{"column_name":"123"}]')) as filemock:
+        schema.show_table("test.json")
+    with patch("builtins.open", mock_open(read_data="""column_name\n123""")) as filemock:
+        schema.show_table("test.csv")
+    schema.show_table("123")
 
-
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     test_schema()

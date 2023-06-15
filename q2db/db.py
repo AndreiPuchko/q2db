@@ -15,11 +15,12 @@
 
 import sys
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
 
     sys.path.insert(0, ".")
 
     from demo.demo_mysql import demo
+
     # from demo.demo_postgresql import demo
 
     # from demo.demo_sqlite import demo
@@ -38,7 +39,7 @@ import sqlite3 as db_sqlite_connector
 # import mysql.connector as db_mysql_connector
 # import psycopg2 as db_postgresql_connector
 
-from q2db.utils import int_, is_sub_list
+from q2db.utils import int_, is_sub_list, num
 from q2db.cursor import Q2MysqlCursor, Q2SqliteCursor, Q2PostgresqlCursor
 from q2db.schema import Q2DbSchema
 
@@ -57,7 +58,7 @@ class Q2Db:
         get_admin_credential_callback=None,
         create_only=None,
         root_user=None,
-        root_password=None
+        root_password=None,
     ):
         """
         :param url: 'sqlite3|mysql|postgresql://username:password@host:port/database'
@@ -71,6 +72,7 @@ class Q2Db:
         :param guest_mode:, if empty - False
         :param get_admin_credential_callback: function that gets db name, host and port
             and returns (user, password)
+        :param create_only: False, used for
         """
         self.url = url
         self.guest_mode = guest_mode
@@ -82,13 +84,13 @@ class Q2Db:
                 if database_name is None:
                     database_name = ":memory:"
             self.db_engine_name = db_engine_name
-            if self.db_engine_name == "sqlite":
-                self.db_engine_name = "sqlite3"
             self.user = user
             self.password = password
             self.host = host
             self.database_name = database_name
             self.port = int_(port)
+        if self.db_engine_name == "sqlite":
+            self.db_engine_name = "sqlite3"
 
         self.root_user = root_user
         self.root_password = root_password
@@ -114,7 +116,7 @@ class Q2Db:
                 self.db_api_engine = db_mysql_connector
                 self.db_cursor_class = Q2MysqlCursor
                 self.ec = "`"
-            except Exception:
+            except Exception:  # pragma: no cover
                 raise Exception(
                     "Sorry, can not import mysql.connector - use: pip install mysql-connector-python"
                 )
@@ -124,7 +126,7 @@ class Q2Db:
 
                 self.db_api_engine = db_postgresql_connector
                 self.db_cursor_class = Q2PostgresqlCursor
-            except Exception:
+            except Exception:  # pragma: no cover
                 raise Exception("Sorry, can not import psycopg2 - use: pip install psycopg2-binary")
         elif self.db_engine_name == "sqlite3":
             self.db_api_engine = db_sqlite_connector
@@ -153,7 +155,7 @@ class Q2Db:
         )
         self.set_schema(Q2DbSchema())
 
-    def get_admin_credential_callback(self, database, dbengine, host, port):
+    def get_admin_credential_callback(self, database, dbengine, host, port):  # pragma: no cover
         pass
 
     @staticmethod
@@ -360,9 +362,13 @@ class Q2Db:
                 for x in ["datatype", "datalen", "datadec"]:
                     column_definition[x] = primary_column_definition[x]
 
-        if "datatype" not in column_definition:
+        if "datatype" not in column_definition or column_definition.get("datatype") is None:
             return None
+        column_definition["size"] = ""
+        column_definition["default"] = ""
+
         datatype = column_definition["datatype"].upper()
+
         if datatype[:3] in ["NUM", "DEC"]:
             column_definition["datatype"] = "NUMERIC"
             column_definition["default"] = "DEFAULT '0'"
@@ -386,9 +392,6 @@ class Q2Db:
             column_definition["size"] = ""
             if self.db_engine_name == "postgresql":
                 column_definition["datatype"] = "TEXT"
-        else:
-            column_definition["size"] = ""
-            column_definition["default"] = ""
 
         _column_definition = dict(column_definition)
 
@@ -477,11 +480,8 @@ class Q2Db:
     def _sqlite_patch(self, sql, record, table_columns):
         """Adapt sql statement for sqlite - convert str to int, replace placeholder character to ?"""
         for x in record:
-            if "int" in table_columns.get(x, {}).get("type", ""):
-                try:
-                    record[x] = int_(record[x])
-                except Exception:
-                    print(table_columns.get(x, {}).get("type", ""), record[x])
+            if "int" == table_columns.get(x, {}).get("datatype", "").lower()[:3]:
+                record[x] = int_(record[x])
         sql = sql.replace("%s", "?")
         return sql
 
@@ -490,9 +490,7 @@ class Q2Db:
         for x in record:
             if record[x] != "":
                 continue
-            datatype = self.db_schema.get_schema_attr(table, x).get("datatype")
-            if datatype is None:
-                continue
+            datatype = self.db_schema.get_schema_attr(table, x).get("datatype").lower()
             if "int" in datatype or "dec" in datatype or "num" in datatype:
                 record[x] = "0"
 
@@ -507,8 +505,8 @@ class Q2Db:
 
     def raw_insert(self, table_name="", record={}):
         """insert dictionary into table"""
-        if not (table_name or record):
-            return None
+        if table_name == "":
+            return False
         table_columns = self.get_database_columns(table_name[:])
         sql = (
             f"insert into {self.ec}{table_name}{self.ec} ("
@@ -539,7 +537,7 @@ class Q2Db:
         insert dictionary into table
         """
         if not (table_name and record):
-            return None
+            return False
 
         if not table_name.upper().startswith("LOG_"):
             record["q2_time"] = f"{self.cursor().now()}"
@@ -599,7 +597,7 @@ class Q2Db:
                         > 0
                     ):
                         if is_string_data:
-                            primary_key_value += "."
+                            primary_key_value = str(primary_key_value) + "."
                         else:
                             primary_key_value += 1
                     record[x] = primary_key_value
@@ -623,9 +621,9 @@ class Q2Db:
         self._check_record_for_numbers(table_name, record)
         data = [record[x] for x in columns_list]
 
-        if not data:
-            self.last_sql_error = f"no data to insert into table '{table_name}'"
-            return False
+        # if not data:
+        #     self.last_sql_error = f"no data to insert into table '{table_name}'"
+        #     return False
 
         self._cursor(sql, data)
 
@@ -642,7 +640,7 @@ class Q2Db:
     def update(self, table_name="", record={}):
         """update from dictionary to table"""
         if not (table_name and record):
-            return None
+            return False
 
         table_columns = self.get_database_columns(table_name)
         primary_key_columns = self.get_primary_key_columns(table_name)
@@ -697,7 +695,7 @@ class Q2Db:
 
     def delete(self, table_name="", record={}):
         if not (table_name and record):
-            return None
+            return False
         self.last_error_data = {}
         for x in self.db_schema.get_child_tables(table_name, record):
             x["escape_char"] = self.ec
@@ -720,11 +718,17 @@ class Q2Db:
 
                 return False
         table_columns = self.get_database_columns(table_name)
-        primary_key_columns = self.get_primary_key_columns(table_name)
-        if set(self.get_primary_key_columns(table_name)).issubset(set(primary_key_columns.keys())):
-            columns_list = [x for x in record if x in primary_key_columns]
-        else:
-            columns_list = [x for x in record if x in table_columns]
+        # primary_key_columns = self.get_primary_key_columns(table_name)
+        # if set(self.get_primary_key_columns(table_name)).issubset(set(primary_key_columns.keys())):
+        #     columns_list = [x for x in record if x in primary_key_columns]
+        # else:
+        #     columns_list = [x for x in record if x in table_columns]
+        columns_list = [x for x in record if x in table_columns]
+
+        if columns_list == []:
+            self.last_sql_error = f"No columns from table in data to delete: {record}"
+            return False
+
         where_clause = " and ".join([f"{self.ec}{x}{self.ec} = %s " for x in columns_list])
         data = [record[x] for x in columns_list]
 
@@ -733,6 +737,9 @@ class Q2Db:
             select_sql = self._sqlite_patch(select_sql, record, table_columns)
 
         row_to_be_deleted = self._cursor(select_sql, data)
+        if row_to_be_deleted == {}:
+            return False
+
         for x in row_to_be_deleted:
             row_to_be_deleted[x]["q2_mode"] = "d"
             row_to_be_deleted[x]["q2_time"] = f"{self.cursor().now()}"
@@ -744,7 +751,7 @@ class Q2Db:
 
         self._cursor(sql, data)
 
-        if self.last_sql_error:
+        if self.last_sql_error:  # pragma: no cover
             return False
         else:
             return True
@@ -766,16 +773,28 @@ class Q2Db:
         return {}
 
     def get_uniq_value(self, table_name, column, start_value):
-        datatype = self.db_schema.get_schema_attr(table_name, column)["datatype"]
+        datatype = self.db_schema.get_schema_attr(table_name, column).get("datatype")
+        if datatype is None:
+            return False
+        datatype = datatype.lower()
         if "int" in datatype or "dec" in datatype or "num" in datatype:
-            return self.cursor(
-                f"""select min({self.ec}{column}{self.ec}) +1 as pkvalue
+            return num(
+                self.cursor(
+                    f"""select coalesce((
+                            select min({self.ec}{column}{self.ec}) +1 as pkvalue
                             from {self.ec}{table_name}{self.ec}
-                            where {self.ec}{column}{self.ec} >= {start_value}
+                            where {self.ec}{column}{self.ec} >=
+                                        (
+                                            select max({self.ec}{column}{self.ec})
+                                            from {self.ec}{table_name}{self.ec}
+                                            where {self.ec}{column}{self.ec}<={start_value}
+                                        )
                                 and {self.ec}{column}{self.ec} + 1 not in
                                     (select {self.ec}{column}{self.ec} from {self.ec}{table_name}{self.ec})
+                        ), {start_value}) as pkvalue
                         """
-            ).r.pkvalue
+                ).r.pkvalue
+            )
         else:
             return start_value + "."
 
@@ -807,7 +826,8 @@ class Q2Db:
             self.last_sql_error = str(err) + "> " + sql
             self.last_sql = sql
             self.last_record = "!".join([f"{x}" for x in data])
-            _rows = {0: {}}
+            # _rows = {0: {}}
+            _rows = dict()
         return _rows
 
     def cursor(self, sql="", table_name="", order="", where="", data=[], cache_flag=True):

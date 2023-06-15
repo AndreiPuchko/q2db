@@ -16,7 +16,7 @@
 """
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import sys
 
     sys.path.insert(0, ".")
@@ -72,14 +72,10 @@ class Q2DbSchema:
         :param uk: unique
         :param index: create index for the column
         """
-        if not (table or column):
-            return
 
         if isinstance(table, dict):
-            if table.get("column"):
-                column = table.get("column")
-            if table.get("name"):
-                column = table.get("name")
+            column = table.get("column")
+            column = table.get("name")
             datatype = table.get("datatype")
             datalen = table.get("datalen")
             datadec = table.get("datadec")
@@ -90,7 +86,10 @@ class Q2DbSchema:
             ai = table.get("ai")
             uk = table.get("uk")
             index = table.get("index")
-            table = table["table"]
+            table = table.get("table")
+
+        if not (table or column):
+            return
 
         if table not in self.schema["tables"]:
             self.schema["tables"][table] = {"columns": {}, "indexes": {}}
@@ -117,7 +116,7 @@ class Q2DbSchema:
         rez = []
         for x in self.schema["indexes"]:
             di = dict(self.schema["indexes"][x])
-            di['table'] = x
+            di["table"] = x
             rez.append(di)
         return rez
 
@@ -194,11 +193,18 @@ class Q2DbSchema:
 
     @staticmethod
     def show_table(file, table="example_table"):
+        """
+        For given json or csv file
+        puts into stdout
+        snippet of python code
+        which create table
+        """
         if file.lower().endswith(".csv"):
-            print(file)
             rows = [x for x in csv.DictReader(open(file), dialect="excel")]
-        else:
+        elif file.lower().endswith(".json"):
             rows = json.load(open(file))
+        else:
+            rows = []
 
         schema = {}
         for row in rows:
@@ -209,3 +215,4 @@ class Q2DbSchema:
 
         for x in schema:
             print(f"schema.add(table='{table}', '{x}', datatype='char', datalen={schema[x]['lenght']})")
+        return schema

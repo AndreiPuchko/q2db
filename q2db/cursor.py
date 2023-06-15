@@ -1,4 +1,4 @@
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import sys
 
     if "." not in sys.path:
@@ -84,7 +84,7 @@ class Q2Cursor:
         self.q2_db.rollback()
 
     def get_table_names_sql(table_select_clause="", database_name=""):
-        """returns sql statement (depending database) for select a list of all tables or given table"""
+        """returns sql statement (depends of database) for select a list of all tables or given table"""
         pass
 
     def get_table_columns_sql(table_name="", where_clause="", database_name=""):
@@ -113,9 +113,6 @@ class Q2Cursor:
     def last_record(self):
         return self.q2_db.last_record
 
-    def last_deleted_row(self):
-        return self.q2_db.lastDeleteData
-
     def sub_filter(self, column, text):
         if self.table_name:
             f = "".join(self.primary_key_columns)
@@ -126,7 +123,7 @@ class Q2Cursor:
             sql += f" ({self.prepare_column_search(column,text)}) "
             if self.order:
                 sql += f" order by {self.order}"
-            error, _rows = self.q2_db._cursor(f"""{sql}""")
+            _rows = self.q2_db._cursor(f"""{sql}""")
             return _rows
         return {}
 
@@ -223,6 +220,10 @@ class Q2Cursor:
         return self._current_row == 0
 
     def seek_primary_key_row(self, dataDic):
+        """
+        seek for row with primary kev == dataDic[pk]
+        return row index (row number)
+        """
         pk_name = [x for x in self.primary_key_columns][0]
         pk_value = str(dataDic[pk_name])
         for x in range(self.row_count()):
@@ -230,9 +231,13 @@ class Q2Cursor:
                 return x
 
     def seek_row(self, data_dic):
+        """
+        seek for a row which containing data_dic
+        """
         row_counter = 0
         for x in self.records():
-            if [z for z in data_dic if z in x and data_dic[z] == x[z]]:
+            sk = [z for z in data_dic if z in x and data_dic[z] == x[z]]
+            if len(sk) == len(data_dic):
                 return row_counter
             row_counter += 1
         return row_counter
@@ -241,11 +246,46 @@ class Q2Cursor:
         return self.primary_key_columns[:]
 
     def get_uniq_value(self, column, start_value):
+        """
+        returns next global (whole table w/o where) unique value for the column
+        """
         return self.q2_db.get_uniq_value(
             self.table_name,
             column,
             start_value,
         )
+
+    def get_next_sequence(self, column, start_value=0):
+        """
+        returns next local (for the current where clause) unique value for the column
+        """
+        if self.table_name:
+            sql = f"""
+            select min({column}+1) as seq
+            from {self.ec}{self.table_name}{self.ec}
+            where {column} >=
+                (
+                    select max({self.ec}{column}{self.ec})
+                    from {self.ec}{self.table_name}{self.ec}
+                    where {self.ec}{column}{self.ec}<={start_value}
+                            {'and (' if self.where else '' } {self.where} {')' if self.where else '' }
+                )
+                and {column}+1 not in
+                    (
+                    select {column}
+                    from {self.ec}{self.table_name}{self.ec}
+                    {'where' if self.where else '' } {self.where}
+                    )
+                {'and' if self.where else '' } {self.where}
+            """
+            try:
+                seq = num(self.q2_db.cursor(sql).record(0)["seq"])
+            except Exception:
+                seq = 1
+
+            return seq + (0 if seq else 1)
+        else:
+            return 0
 
     def refresh(self):
         self._current_row = 0
@@ -290,30 +330,6 @@ class Q2Cursor:
 
     def get_columns(self):
         return [x for x in self.record(0)]
-
-    def get_next_sequence(self, column, start_value=0):
-        if self.table_name:
-            sql = f"""
-            select min({column}+1) as seq
-            from {self.ec}{self.table_name}{self.ec}
-            where {column} >={start_value}
-                and {column}+1 not in
-                    (
-                    select {column}
-                    from {self.ec}{self.table_name}{self.ec}
-                    {'where' if self.where else '' } {self.where}
-                    )
-                {'and' if self.where else '' } {self.where}
-            order by {column}
-            """
-            try:
-                seq = num(self.q2_db.cursor(sql).record(0)["seq"])
-            except Exception:
-                seq = 1
-
-            return seq + (0 if seq else 1)
-        else:
-            return 0
 
     def _prepare_import(self, file):
         if not hasattr(file, "read"):

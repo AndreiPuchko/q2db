@@ -1,4 +1,4 @@
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import sys
     if "." not in sys.path:
         sys.path.insert(0, ".")
@@ -25,3 +25,9 @@ def test_num():
 def test_is_sub_list():
     assert is_sub_list([1, 2], [1, 2, 3]) is True
     assert is_sub_list([1, 2], [1, 3]) is False
+
+
+if __name__ == "__main__":  # pragma: no cover
+    test_int_()
+    test_num()
+    test_is_sub_list()
