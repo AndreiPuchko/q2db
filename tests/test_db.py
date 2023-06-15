@@ -172,7 +172,7 @@ def _test_cursor(database: Q2Db):
     assert cursor.get("w1=3") == {}
     cursor.sub_filter("name", "to+1")
 
-    print(cursor.prepare_column_search("name", "to+1", "after"))
+    cursor.prepare_column_search("name", "to+1", "after")
 
     assert cursor.get_next_sequence("uid", 15) == 0
 
@@ -394,16 +394,17 @@ def test_wrongdb():
     # Wrong engine
     with pytest.raises(Exception, match="Sorry, wrong DBAPI engine - .*") as e:
         assert Q2Db(url="mysql21://root:q2test@localhost:3308/q2test", create_only=True)
-    # Wrong user
-    with pytest.raises(Exception) as e:
-        assert Q2Db(
-            url="mysql://root1" ":q2test2@localhost:3308/q2test", root_user="root", root_password="q2test"
-        )
+    # User doesnt exist, create and open
+    assert Q2Db(url="mysql://root1:q2test2@localhost:3308/q2test", root_user="root", root_password="q2test")
+
+    # Wrong passwort for root1
+    with pytest.raises(Exception, match="Access denied for user ") as e:
+        Q2Db(url="mysql://root1:q2test1@localhost:3308/q2test", root_user="root", root_password="q2test")
+
+    Q2Db(url="mysql://root:q2test@localhost:3308/q2test").cursor("DROP USER IF EXISTS root1")
 
     Q2Db(url="mysql://root:q2test@localhost:3308/q2test", create_only=True)
     Q2Db(url="postgresql://q2user:q2test@localhost:6432/q2test", create_only=True)
-
-    Q2Db(url="mysql://root1:q2test1@localhost:3308/q2test", root_user="root", root_password="q2test")
 
     with pytest.raises(Exception, match="Access denied for user ") as e:
         assert Q2Db(
