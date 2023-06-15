@@ -397,7 +397,7 @@ def test_wrongdb():
     # Wrong user
     with pytest.raises(Exception, match="Access denied for user ") as e:
         assert Q2Db(
-            url="mysql://root1:q2test2@localhost:3308/q2test", root_user="root", root_password="q2test"
+            url="mysql://root1" ":q2test2@localhost:3308/q2test", root_user="root", root_password="q2test"
         )
 
     Q2Db(url="mysql://root:q2test@localhost:3308/q2test", create_only=True)
@@ -426,7 +426,6 @@ def test_wrongdb():
     Q2PostgresqlCursor.get_table_columns_sql()
     Q2SqliteCursor.get_table_names_sql()
     Q2SqliteCursor.get_table_columns_sql()
-
 
 
 if __name__ == "__main__":  # pragma: no cover
