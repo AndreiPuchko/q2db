@@ -395,10 +395,10 @@ def test_wrongdb():
     with pytest.raises(Exception, match="Sorry, wrong DBAPI engine - .*") as e:
         assert Q2Db(url="mysql21://root:q2test@localhost:3308/q2test", create_only=True)
     # Wrong user
-    # with pytest.raises(Exception, match="Access denied for user .*") as e:
-    assert Q2Db(
-        url="mysql://root1" ":q2test2@localhost:3308/q2test", root_user="root", root_password="q2test"
-    )
+    with pytest.raises(Exception) as e:
+        assert Q2Db(
+            url="mysql://root1" ":q2test2@localhost:3308/q2test", root_user="root", root_password="q2test"
+        )
 
     Q2Db(url="mysql://root:q2test@localhost:3308/q2test", create_only=True)
     Q2Db(url="postgresql://q2user:q2test@localhost:6432/q2test", create_only=True)
