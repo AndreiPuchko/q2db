@@ -490,7 +490,7 @@ class Q2Db:
         for x in record:
             if record[x] != "":
                 continue
-            datatype = self.db_schema.get_schema_attr(table, x).get("datatype").lower()
+            datatype = self.db_schema.get_schema_attr(table, x).get("datatype", "").lower()
             if "int" in datatype or "dec" in datatype or "num" in datatype:
                 record[x] = "0"
 
