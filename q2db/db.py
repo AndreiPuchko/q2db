@@ -718,12 +718,12 @@ class Q2Db:
 
                 return False
         table_columns = self.get_database_columns(table_name)
-        # primary_key_columns = self.get_primary_key_columns(table_name)
-        # if set(self.get_primary_key_columns(table_name)).issubset(set(primary_key_columns.keys())):
-        #     columns_list = [x for x in record if x in primary_key_columns]
-        # else:
-        #     columns_list = [x for x in record if x in table_columns]
-        columns_list = [x for x in record if x in table_columns]
+        primary_key_columns = self.get_primary_key_columns(table_name)
+        if set(self.get_primary_key_columns(table_name)).issubset(set(primary_key_columns.keys())):
+            columns_list = [x for x in record if x in primary_key_columns]
+        else:
+            columns_list = [x for x in record if x in table_columns]
+        # columns_list = [x for x in record if x in table_columns]
 
         if columns_list == []:
             self.last_sql_error = f"No columns from table in data to delete: {record}"
