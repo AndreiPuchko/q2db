@@ -180,8 +180,14 @@ class Q2Db:
                 self.database_name, self.db_engine_name, self.host, self.port, admin_database_user
             )
         else:
-            root_user = self.root_user if self.root_user else self.user
-            root_password = self.root_password if self.root_password else self.password
+            if self.root_user and self.root_user != self.user:
+                root_user = self.root_user
+                root_password = self.root_password
+            else:
+                root_user = self.user
+                root_password = self.password
+            # root_user = self.root_user if self.root_user else self.user
+            # root_password = self.root_password if self.root_password else self.password
         self.connection = self.connect(
             user=root_user,
             password=root_password,
@@ -190,7 +196,11 @@ class Q2Db:
             port=self.port,
         )
         if self.db_engine_name == "mysql":
-            self._cursor(sql=f"CREATE USER IF NOT EXISTS '{self.user}' IDENTIFIED BY '{self.password}'")
+            version = self.connection.get_server_version()
+            if (version[0]*10 + version[1]) > 55:
+                self._cursor(sql=f"CREATE USER IF NOT EXISTS '{self.user}' IDENTIFIED BY '{self.password}'")
+            else:
+                self._cursor(sql=f"CREATE USER '{self.user}' IDENTIFIED BY '{self.password}'")
             self._cursor(sql=f"CREATE DATABASE IF NOT EXISTS {self.database_name}")
             self._cursor(sql=f"GRANT ALL PRIVILEGES ON {self.database_name}.* TO '{self.user}'")
 
