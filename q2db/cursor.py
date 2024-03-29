@@ -388,9 +388,13 @@ class Q2Cursor:
             tick_callback() if tick_callback else None
 
         if not hasattr(file, "write"):
-            write_to = open(file, "w")
+            write_to = open(file, "w", encoding='utf-8')
         else:
             write_to = file
+        write_to, rez = self.before_export(write_to, rez)
+        return write_to, rez
+
+    def before_export(self, write_to, rez):
         return write_to, rez
 
     def export_json(self, file, tick_callback=None):
@@ -407,7 +411,7 @@ class Q2Cursor:
         """
         write_to, rez = self._prepare_export(file, tick_callback)
         if rez:
-            csv_writer = csv.DictWriter(write_to, [x for x in rez[0]], dialect="excel")
+            csv_writer = csv.DictWriter(write_to, [x for x in rez[0]], dialect="excel", lineterminator="\n")
             csv_writer.writeheader()
             for x in rez:
                 csv_writer.writerow(x)

@@ -7,3 +7,4 @@ s.calltree
 profile.sh
 s.profile
 .coverage
+.vscode
