@@ -197,19 +197,28 @@ class Q2Db:
         )
         if self.db_engine_name == "mysql":
             version = self.connection.get_server_version()
-            if (version[0]*10 + version[1]) > 55:
+            if (version[0] * 10 + version[1]) > 55 or "MariaDB" in self.connection.get_server_info():
                 self._cursor(sql=f"CREATE USER IF NOT EXISTS '{self.user}' IDENTIFIED BY '{self.password}'")
             else:
                 self._cursor(sql=f"CREATE USER '{self.user}' IDENTIFIED BY '{self.password}'")
+            self.raise_sql_error()
             self._cursor(sql=f"CREATE DATABASE IF NOT EXISTS {self.database_name}")
+            self.raise_sql_error()
             self._cursor(sql=f"GRANT ALL PRIVILEGES ON {self.database_name}.* TO '{self.user}'")
-
+            self.raise_sql_error()
         elif self.db_engine_name == "postgresql":
             self._cursor(sql=f"CREATE USER {self.user} WITH PASSWORD  '{self.password}'")
+            self.raise_sql_error()
             self._cursor(sql=f"CREATE DATABASE {self.database_name} WITH OWNER = {self.user}")
+            self.raise_sql_error()
             self._cursor(sql=f"GRANT ALL PRIVILEGES ON DATABASE {self.database_name} TO {self.user}")
+            self.raise_sql_error()
         self.connection.close()
         return True
+
+    def raise_sql_error(self):
+        if self.last_sql_error:
+            raise Exception(self.last_sql_error)
 
     def connect(
         self,

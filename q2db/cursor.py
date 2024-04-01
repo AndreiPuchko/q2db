@@ -30,6 +30,7 @@ import csv
 
 from datetime import datetime
 from q2db.utils import num
+import logging
 
 
 class lazy_rows(dict):
@@ -49,6 +50,9 @@ class lazy_rows(dict):
             f" where {self.cursor.ec}{self.pk}{self.cursor.ec} = '{pk_value}'"
         )
         row = self.cursor.q2_db._cursor(f"{sql}").get(0)
+        if row is None:
+            logging.error(sql)
+            return {}
         super().__getitem__(row_number).update(row)
         if row_number == 0:
             self.column_count = len(row)
@@ -241,8 +245,12 @@ class Q2Cursor:
         pk_name = [x for x in self.primary_key_columns][0]
         pk_value = str(dataDic[pk_name])
         for x in range(self.row_count()):
-            if self.record(x)[pk_name] == pk_value:
-                return x
+            if pk_name in self._rows[x]:
+                if self._rows[x][pk_name] == pk_value:
+                    return x
+            else:
+                if self.record(x)[pk_name] == pk_value:
+                    return x
 
     def seek_row(self, data_dic):
         """
