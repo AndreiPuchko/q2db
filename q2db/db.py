@@ -19,7 +19,7 @@ if __name__ == "__main__":  # pragma: no cover
 
     sys.path.insert(0, ".")
 
-    from demo.demo_mysql import demo
+    from demo.demo_postgresql import demo
 
     # from demo.demo_postgresql import demo
 
@@ -207,10 +207,17 @@ class Q2Db:
             self._cursor(sql=f"GRANT ALL PRIVILEGES ON {self.database_name}.* TO '{self.user}'")
             self.raise_sql_error()
         elif self.db_engine_name == "postgresql":
-            self._cursor(sql=f"CREATE USER {self.user} WITH PASSWORD  '{self.password}'")
-            self.raise_sql_error()
-            self._cursor(sql=f"CREATE DATABASE {self.database_name} WITH OWNER = {self.user}")
-            self.raise_sql_error()
+            if self._cursor(sql=f" SELECT * FROM pg_catalog.pg_roles WHERE rolname ='{self.user}'") == {}:
+                self._cursor(sql=f"CREATE USER {self.user} WITH PASSWORD  '{self.password}'")
+                self.raise_sql_error()
+            if (
+                self._cursor(
+                    sql=f" SELECT * FROM pg_catalog.pg_database  WHERE datname  ='{self.database_name}'"
+                )
+                == {}
+            ):
+                self._cursor(sql=f"CREATE DATABASE {self.database_name} WITH OWNER = {self.user}")
+                self.raise_sql_error()
             self._cursor(sql=f"GRANT ALL PRIVILEGES ON DATABASE {self.database_name} TO {self.user}")
             self.raise_sql_error()
         self.connection.close()
