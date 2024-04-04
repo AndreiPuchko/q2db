@@ -36,7 +36,7 @@ jobs:
       shell: bash
       run: |
         cd database.docker
-        docker-compose up -d
+        docker compose up -d
     - name: Install dependencies
       shell: bash
       run: python -m poetry install
