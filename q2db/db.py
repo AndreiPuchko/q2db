@@ -35,6 +35,7 @@ if __name__ == "__main__":  # pragma: no cover
 
 import re
 import sqlite3 as db_sqlite_connector
+import sqlparse
 
 # import mysql.connector as db_mysql_connector
 # import psycopg2 as db_postgresql_connector
@@ -42,6 +43,14 @@ import sqlite3 as db_sqlite_connector
 from q2db.utils import int_, is_sub_list, num
 from q2db.cursor import Q2MysqlCursor, Q2SqliteCursor, Q2PostgresqlCursor
 from q2db.schema import Q2DbSchema
+
+
+def escape_sql_string(s):
+    """Escape special characters in a SQL string."""
+    if isinstance(s, str):
+        return s.replace("\\", "\\\\\\\\").replace("'", "\\'").replace('"', '\\"')
+    else:
+        return s
 
 
 class Q2Db:
@@ -89,6 +98,9 @@ class Q2Db:
             self.host = host
             self.database_name = database_name
             self.port = int_(port)
+
+        self.database_name = escape_sql_string(self.database_name)
+
         if self.db_engine_name == "sqlite":
             self.db_engine_name = "sqlite3"
 
@@ -198,25 +210,27 @@ class Q2Db:
         if self.db_engine_name == "mysql":
             version = self.connection.get_server_version()
             if (version[0] * 10 + version[1]) > 55 or "MariaDB" in self.connection.get_server_info():
-                self._cursor(sql=f"CREATE USER IF NOT EXISTS '{self.user}' IDENTIFIED BY '{self.password}'")
+                self._cursor("CREATE USER IF NOT EXISTS %s IDENTIFIED BY %s", (self.user, self.password))
             else:
-                self._cursor(sql=f"CREATE USER '{self.user}' IDENTIFIED BY '{self.password}'")
+                self._cursor("CREATE USER %s IDENTIFIED BY %s", (self.user, self.password))
             self.raise_sql_error()
-            self._cursor(sql=f"CREATE DATABASE IF NOT EXISTS {self.database_name}")
+            self._cursor(sql=f"CREATE DATABASE IF NOT EXISTS {escape_sql_string(self.database_name)}")
             self.raise_sql_error()
-            self._cursor(sql=f"GRANT ALL PRIVILEGES ON {self.database_name}.* TO '{self.user}'")
+            self._cursor(
+                sql=f"GRANT ALL PRIVILEGES ON {escape_sql_string(self.database_name)}.* TO '{self.user}'"
+            )
             self.raise_sql_error()
         elif self.db_engine_name == "postgresql":
-            if self._cursor(sql=f" SELECT * FROM pg_catalog.pg_roles WHERE rolname ='{self.user}'") == {}:
-                self._cursor(sql=f"CREATE USER {self.user} WITH PASSWORD  '{self.password}'")
+            if self._cursor(" SELECT * FROM pg_catalog.pg_roles WHERE rolname = %s", (self.user,)) == {}:
+                self._cursor("CREATE USER %s WITH PASSWORD  %s", (self.user, self.password))
                 self.raise_sql_error()
             if (
                 self._cursor(
-                    sql=f" SELECT * FROM pg_catalog.pg_database  WHERE datname  ='{self.database_name}'"
+                    " SELECT * FROM pg_catalog.pg_database  WHERE datname  = %s", (self.database_name,)
                 )
                 == {}
             ):
-                self._cursor(sql=f"CREATE DATABASE {self.database_name} WITH OWNER = {self.user}")
+                self._cursor("CREATE DATABASE %s WITH OWNER = %s", (self.database_name, self.user))
                 self.raise_sql_error()
             self._cursor(sql=f"GRANT ALL PRIVILEGES ON DATABASE {self.database_name} TO {self.user}")
             self.raise_sql_error()
@@ -290,6 +304,7 @@ class Q2Db:
     def get_database_columns(self, table_name="", filter="", query_database=None):
         """returns database columns for given table"""
 
+        table_name = escape_sql_string(table_name)
         if table_name.upper().startswith("LOG_"):
             table_name = table_name[4:]
 
@@ -321,7 +336,7 @@ class Q2Db:
 
     def get_tables(self, table_name=""):
         """Returns a list of tables names from database"""
-        table_select_clause = f" and TABLE_NAME='{table_name}'" if table_name else ""
+        table_select_clause = f" and TABLE_NAME='{escape_sql_string(table_name)}'" if table_name else ""
         sql = self.db_cursor_class.get_table_names_sql(table_select_clause, self.database_name)
         return [x["table_name"] for x in self.cursor(sql).records()]
 
@@ -842,6 +857,8 @@ class Q2Db:
             if data:
                 _work_cursor.execute(sql, data)
             else:
+                if ";" in sql:
+                    sql = sqlparse.split(sql)[0]
                 _work_cursor.execute(sql)
             if _work_cursor.description:
                 i = 0
