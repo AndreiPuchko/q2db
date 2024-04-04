@@ -230,7 +230,7 @@ class Q2Db:
                 )
                 == {}
             ):
-                self._cursor("CREATE DATABASE %s WITH OWNER = %s", (self.database_name, self.user))
+                self._cursor(sql=f"CREATE DATABASE {self.database_name} WITH OWNER = {self.user}")
                 self.raise_sql_error()
             self._cursor(sql=f"GRANT ALL PRIVILEGES ON DATABASE {self.database_name} TO {self.user}")
             self.raise_sql_error()
