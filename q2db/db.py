@@ -355,12 +355,15 @@ class Q2Db:
             return
         self.migrate_error_list = []
         _tables = [x for x in self.db_schema.get_schema_tables()]
-        _tables += [x for x in self.get_tables() if x not in _tables]
+        db_only_tables = [x for x in self.get_tables() if x not in _tables]
+        _tables += db_only_tables
         for table in _tables:
             # column that are already in
+            # if table == 'sqlite_sequence':
+            #     continue
             database_columns = self.get_database_columns(table, query_database=True)
             schema_columns = self.db_schema.get_schema_columns(table)
-            if not self.guest_mode:
+            if not self.guest_mode and table not in db_only_tables:
                 self._add_q2_columns(schema_columns)
             for column in schema_columns:
                 colDic = self.db_schema.get_schema_attr(table, column)
@@ -462,6 +465,8 @@ class Q2Db:
     def create_column(self, column_definition):
         """migrate given 'column_definition' to database"""
         sql_column_text = self.column_defintion(column_definition)
+        if sql_column_text is None:
+            return False
         table = column_definition["table"]
 
         if table in self.get_tables(table):

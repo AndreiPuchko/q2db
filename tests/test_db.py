@@ -430,7 +430,7 @@ def test_wrongdb():
 
 
 if __name__ == "__main__":  # pragma: no cover
-    # test_mysql()
-    # test_postgresql()
+    test_mysql()
+    test_postgresql()
     test_sqlite()
-    # test_wrongdb()
+    test_wrongdb()
