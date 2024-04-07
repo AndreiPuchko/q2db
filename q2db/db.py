@@ -151,7 +151,8 @@ class Q2Db:
             try:
                 self._connect()
                 return
-            except Exception:
+            except Exception as e:
+                print(f"{e}")
                 pass  # Do nothing - give chance to screate database!
 
         if self.create():
@@ -316,7 +317,8 @@ class Q2Db:
 
         cols = {}
         sql = self.db_cursor_class.get_table_columns_sql(table_name, filter, self.database_name)
-        for x in self.cursor(sql).records():
+        # for x in self.cursor(sql).records():
+        for x in [rec for rec in self._cursor(sql).values()]:
             if "name" in x:
                 if "datalen" not in x:  # SQLITE
                     if "(" in x["datatype"]:
@@ -338,7 +340,7 @@ class Q2Db:
         """Returns a list of tables names from database"""
         table_select_clause = f" and TABLE_NAME='{escape_sql_string(table_name)}'" if table_name else ""
         sql = self.db_cursor_class.get_table_names_sql(table_select_clause, self.database_name)
-        return [x["table_name"] for x in self.cursor(sql).records()]
+        return [x["table_name"] for x in self._cursor(sql).values()]
 
     def set_schema(self, db_schema: Q2DbSchema):
         """assign and migrate schema to database"""
@@ -389,9 +391,7 @@ class Q2Db:
         # schema_columns["user_lock"] = {"datatype": "char", "datalen": 1}
         pass
 
-    def create_column(self, column_definition):
-        """migrate given 'column_definition' to database"""
-
+    def column_defintion(self, column_definition):
         column_definition["datadec"] = column_definition.get("datadec", 0)
         column_definition["primarykey"] = "PRIMARY KEY" if column_definition.get("pk", "") else ""
         if column_definition.get("to_table") and column_definition.get("to_column"):
@@ -457,6 +457,11 @@ class Q2Db:
                                 {default}""".format(
             **_column_definition
         )
+        return sql_column_text
+
+    def create_column(self, column_definition):
+        """migrate given 'column_definition' to database"""
+        sql_column_text = self.column_defintion(column_definition)
         table = column_definition["table"]
 
         if table in self.get_tables(table):
@@ -477,6 +482,20 @@ class Q2Db:
             self.create_column(log_column_definition)
         return True
 
+    def alter_column(self, column_definition):
+        sql_column_text = self.column_defintion(column_definition)
+        table = column_definition["table"]
+        column = column_definition["column"]
+        self.migrate_error_list = []
+        sql_cmd = (
+            f"ALTER TABLE {self.ec}{table}{self.ec} "
+            f"change column {self.ec}{column}{self.ec} {sql_column_text}"
+        )
+        if not self.run_migrate_sql(sql_cmd):
+            return False
+        self.migrate_schema()
+        return True
+
     def create_index(self, column_definition):
         """
         create index for column
@@ -493,12 +512,10 @@ class Q2Db:
                 + " on {escape_char}{table}{escape_char} ".format(**column_definition)
                 + " ({escape_char}{column}{escape_char})".format(**column_definition)
             )
-
             self.run_migrate_sql(sql_cmd)
 
     def run_migrate_sql(self, sql_cmd):
         self._cursor(sql_cmd)
-        # if 'Group' in sql_cmd:
         if self.last_sql_error != "":
             self.migrate_error_list.append(f"{self.last_sql_error}: {sql_cmd}")
             return False
@@ -544,109 +561,101 @@ class Q2Db:
     def rollback(self):
         self._cursor("rollback")
 
-    def raw_insert(self, table_name="", record={}):
-        """insert dictionary into table"""
+    def raw_insert(self, table_name="", record={}, _cursor=None):
+        """insert dicti or list of dict into table"""
         if table_name == "":
             return False
         table_columns = self.get_database_columns(table_name[:])
+        if isinstance(record, dict):
+            columns_list = [x for x in record if x in table_columns]
+        elif isinstance(record, list):
+            columns_list = [x for x in record[0] if x in table_columns]
+        else:
+            self.last_sql_error = f"Wrong data to insert into table '{table_name}'"
+            return False
+
+        if not columns_list:
+            self.last_sql_error = f"no data to insert into table '{table_name}'"
+            return False
+
         sql = (
             f"insert into {self.ec}{table_name}{self.ec} ("
-            + ",".join([f"{self.ec}{x}{self.ec}" for x in record.keys() if x in table_columns])
+            + ",".join([f"{self.ec}{x}{self.ec}" for x in columns_list])
             + ") values ("
-            + ",".join(["%s" for x in record.keys() if x in table_columns])
+            + ",".join(["%s" for x in columns_list])
             + ")"
         )
 
         if self.db_engine_name == "sqlite3":
             sql = sql.replace("%s", "?")
 
-        data = [record[x] for x in record.keys() if x in table_columns]
-
-        if not data:
-            self.last_sql_error = f"no data to insert into table '{table_name}'"
-            return False
-
-        self._cursor(sql, data)
+        if isinstance(record, dict):
+            data = [record[x] for x in columns_list]
+            self._cursor(sql, data, _cursor)
+        if isinstance(record, list):
+            for row in record:
+                data = [row[x] for x in columns_list]
+                self._cursor(sql, data, _cursor)
 
         if self.last_sql_error:
             return False
         else:
             return True
 
-    def insert(self, table_name="", record={}):
+    def insert(self, table_name="", record={}, _cursor=None, log=True):
         """
         insert dictionary into table
         """
         if not (table_name and record):
             return False
 
-        if not table_name.upper().startswith("LOG_"):
-            record["q2_time"] = f"{self.cursor().now()}"
-            record["q2_mode"] = "i"
-            # check foreign keys
-            foreign_keys_list = self.db_schema.get_primary_tables(table_name, record)
-            for x in foreign_keys_list:
-                x["escape_char"] = self.ec
-                if (
-                    self.get(
-                        x["primary_table"],
-                        "{escape_char}{primary_column}{escape_char}= '{child_value}' ".format(**x),
-                        x["child_value"],
-                    )
-                    == {}
-                ):
-                    self.last_sql_error = (
-                        "Foreign key error for insert:"
-                        + f" For {self.ec}{table_name}{self.ec}"
-                        + ".{escape_char}{child_column}{escape_char}".format(**x)
-                        + " not found value '{child_value}' ".format(**x)
-                        + "in table "
-                        + x["primary_table"]
-                        + ".{primary_column}".format(**x)
-                    )
-                    self.last_error_data = x
-                    return False
+        if _cursor is None:
+            _cursor = self.raw_cursor()
+
+        record["q2_time"] = f"{self.cursor().now()}"
+        record["q2_mode"] = "i"
+        # check foreign keys
+        foreign_keys_list = self.db_schema.get_primary_tables(table_name, record)
+        for x in foreign_keys_list:
+            x["escape_char"] = self.ec
+            if (
+                self.get(
+                    x["primary_table"],
+                    "{escape_char}{primary_column}{escape_char}= '{child_value}' ".format(**x),
+                    x["child_value"],
+                )
+                == {}
+            ):
+                self.last_sql_error = (
+                    "Foreign key error for insert:"
+                    + f" For {self.ec}{table_name}{self.ec}"
+                    + ".{escape_char}{child_column}{escape_char}".format(**x)
+                    + " not found value '{child_value}' ".format(**x)
+                    + "in table "
+                    + x["primary_table"]
+                    + ".{primary_column}".format(**x)
+                )
+                self.last_error_data = x
+                return False
 
         table_columns = self.get_database_columns(table_name[:])
         primary_key_columns = self.get_primary_key_columns(table_name)
 
         aipk = ""
-        if not table_name.upper().startswith("LOG_") and len(primary_key_columns) == 1:
+        if len(primary_key_columns) == 1:
             for d in primary_key_columns:
                 if primary_key_columns[d].get("ai"):
                     aipk = d
 
         columns_list = [x for x in record if x in table_columns]
-        if not table_name.upper().startswith("LOG_"):
-            if not aipk:
-                # create primary key value
-                for x in primary_key_columns:
-                    if x not in columns_list:
-                        columns_list.append(x)
-                    is_string_data = True if ("char" in primary_key_columns[x]["datatype"]) else False
-                    if is_string_data:
-                        primary_key_value = record.get(x, "")
-                    else:
-                        primary_key_value = int_(record.get(x, 0))
-                    while (
-                        self.cursor(
-                            sql=f"""select {self.ec}{x}{self.ec}
-                                    from {self.ec}{table_name}{self.ec}
-                                    where {self.ec}{x}{self.ec}='{primary_key_value}'
-                                """
-                        ).row_count()
-                        > 0
-                    ):
-                        if is_string_data:
-                            primary_key_value = str(primary_key_value) + "."
-                        else:
-                            primary_key_value += 1
-                    record[x] = primary_key_value
-            else:  # autoincrement
-                for pkname in primary_key_columns:
-                    if pkname in record:
-                        del record[pkname]
-                        columns_list.pop(columns_list.index(pkname))
+        if not aipk:
+            # create primary key value
+            self.make_pk(table_name, record, primary_key_columns, columns_list, _cursor)
+        else:  # autoincrement
+            for pkname in primary_key_columns:
+                if pkname in record:
+                    del record[pkname]
+                    columns_list.pop(columns_list.index(pkname))
 
         sql = (
             f"insert into {self.ec}{table_name}{self.ec} ("
@@ -662,11 +671,7 @@ class Q2Db:
         self._check_record_for_numbers(table_name, record)
         data = [record[x] for x in columns_list]
 
-        # if not data:
-        #     self.last_sql_error = f"no data to insert into table '{table_name}'"
-        #     return False
-
-        self._cursor(sql, data)
+        self._cursor(sql, data, _cursor)
 
         if self.last_sql_error:
             return False
@@ -674,9 +679,35 @@ class Q2Db:
             if aipk:
                 if self.db_engine_name == "sqlite3":
                     record[aipk] = self._cursor("SELECT last_insert_rowid() as aipk")[0]["aipk"]
-            if not table_name.upper().startswith("LOG_") and table_name.upper() != "PLATFORM":
-                self.insert("log_" + table_name, record)
+            if log and not table_name.upper().startswith("LOG_") and table_name.upper() != "PLATFORM":
+                self.raw_insert("log_" + table_name, record, _cursor)
             return True
+
+    def make_pk(self, table_name, record, primary_key_columns, columns_list, _cursor):
+        for pk in primary_key_columns:
+            if pk not in columns_list:
+                columns_list.append(pk)
+            is_string_data = True if ("char" in primary_key_columns[pk]["datatype"]) else False
+            if is_string_data:
+                primary_key_value = record.get(pk, "")
+            else:
+                primary_key_value = int_(record.get(pk, 0))
+            if not is_string_data:
+                primary_key_value = self.get_uniq_value(table_name, pk, primary_key_value, _cursor)
+            else:
+                sql = f"""select {self.ec}{pk}{self.ec} as pk
+                                        from {self.ec}{table_name}{self.ec}
+                                        where {self.ec}{pk}{self.ec}='{{}}'
+                                    """
+                while True:
+                    rez = self._cursor(sql.format(primary_key_value), _cursor=_cursor)
+                    if rez == {}:
+                        break
+                    if is_string_data:
+                        primary_key_value = str(primary_key_value) + "."
+                    else:
+                        primary_key_value += 1
+            record[pk] = primary_key_value
 
     def update(self, table_name="", record={}):
         """update from dictionary to table"""
@@ -786,7 +817,7 @@ class Q2Db:
             row_to_be_deleted[x]["q2_time"] = f"{self.cursor().now()}"
             self.insert("log_" + table_name, row_to_be_deleted[x])
 
-        sql = f"delete from {table_name} where {where_clause}"
+        sql = f"delete from {self.ec}{table_name}{self.ec} where {where_clause}"
         if self.db_engine_name == "sqlite3":
             sql = self._sqlite_patch(sql, record, table_columns)
 
@@ -813,15 +844,13 @@ class Q2Db:
                     return row[0]["ret"]
         return {}
 
-    def get_uniq_value(self, table_name, column, start_value):
+    def get_uniq_value(self, table_name, column, start_value, _cursor=None):
         datatype = self.db_schema.get_schema_attr(table_name, column).get("datatype")
         if datatype is None:
             return False
         datatype = datatype.lower()
         if "int" in datatype or "dec" in datatype or "num" in datatype:
-            return num(
-                self.cursor(
-                    f"""select coalesce((
+            sql = f"""select coalesce((
                             select min({self.ec}{column}{self.ec}) +1 as pkvalue
                             from {self.ec}{table_name}{self.ec}
                             where {self.ec}{column}{self.ec} >=
@@ -834,8 +863,8 @@ class Q2Db:
                                     (select {self.ec}{column}{self.ec} from {self.ec}{table_name}{self.ec})
                         ), {start_value}) as pkvalue
                         """
-                ).r.pkvalue
-            )
+            dig = int_ if "int" in datatype else num
+            return dig(self._cursor(sql, _cursor=_cursor).get(0, {}).get("pkvalue"))
         else:
             return start_value + "."
 
@@ -845,7 +874,10 @@ class Q2Db:
             for idx, col in enumerate(cursor.description)
         }
 
-    def _cursor(self, sql, data=[]):
+    def raw_cursor(self):
+        return self.connection.cursor()
+
+    def _cursor(self, sql, data=[], _cursor=None):
         self.last_sql_error = ""
         self.last_sql = ""
         self.last_record = ""
@@ -853,17 +885,19 @@ class Q2Db:
         if self.db_engine_name == "postgresql":
             sql = sql.replace("`", '"')
         try:
-            _work_cursor = self.connection.cursor()
+            if _cursor is None:
+                # _cursor = self.connection.cursor()
+                _cursor = self.raw_cursor()
             if data:
-                _work_cursor.execute(sql, data)
+                _cursor.execute(sql, data)
             else:
                 if ";" in sql:
                     sql = sqlparse.split(sql)[0]
-                _work_cursor.execute(sql)
-            if _work_cursor.description:
+                _cursor.execute(sql)
+            if _cursor.description:
                 i = 0
-                for x in _work_cursor.fetchall():
-                    _rows[i] = self._dict_factory(_work_cursor, x, sql)
+                for x in _cursor.fetchall():
+                    _rows[i] = self._dict_factory(_cursor, x, sql)
                     i += 1
         except self.db_api_engine.Error as err:
             self.last_sql_error = str(err) + "> " + sql

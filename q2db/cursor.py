@@ -88,6 +88,7 @@ class Q2Cursor:
         self._columns = []
         self._row_count = 0
         self._current_row = 0
+        self._cursor = self.q2_db.connection.cursor()
         self.refresh()
         self.r = Record(self)
         self.tick_callback = None
@@ -141,7 +142,7 @@ class Q2Cursor:
             sql += f" ({self.prepare_column_search(column,text)}) "
             if self.order:
                 sql += f" order by {self.order}"
-            _rows = self.q2_db._cursor(f"""{sql}""")
+            _rows = self.q2_db._cursor(f"""{sql}""", _cursor=self._cursor)
             return _rows
         return {}
 
@@ -179,15 +180,15 @@ class Q2Cursor:
 
     def raw_insert(self, data):
         if self.table_name:
-            return self.q2_db.raw_insert(self.table_name, data)
+            return self.q2_db.raw_insert(self.table_name, data, _cursor=self._cursor)
 
-    def insert(self, data, refresh=True, where=True):
+    def insert(self, data, refresh=True, where=True, log=True):
         if self.table_name:
             if self.where and where:
                 for x in re.split(" and ", self.where, flags=re.IGNORECASE):
                     if x.count("=") == 1 and " OR " not in x.upper():
                         data[x.split("=")[0].strip()] = eval(x.split("=")[1])
-            rez = self.q2_db.insert(self.table_name, data)
+            rez = self.q2_db.insert(self.table_name, data, _cursor=self._cursor, log=log)
             if refresh and rez:
                 self.refresh()
             return rez
@@ -322,10 +323,13 @@ class Q2Cursor:
         if self.table_name and self.primary_key_columns:
             pk = self.primary_key_columns[0]
             self._rows = lazy_rows(
-                self.q2_db._cursor(f"{self.sql.replace(' * ', ' '+pk+ ' ')}", self.data), self
+                self.q2_db._cursor(
+                    f"{self.sql.replace(' * ', ' '+pk+ ' ')}", self.data, _cursor=self._cursor
+                ),
+                self,
             )
         else:
-            self._rows = self.q2_db._cursor(f"""{self.sql}""", self.data)
+            self._rows = self.q2_db._cursor(f"""{self.sql}""", self.data, _cursor=self._cursor)
 
         if self.q2_db.last_sql_error or self._rows == {}:
             self._row_count = -1
@@ -396,7 +400,7 @@ class Q2Cursor:
             tick_callback() if tick_callback else None
 
         if not hasattr(file, "write"):
-            write_to = open(file, "w", encoding='utf-8')
+            write_to = open(file, "w", encoding="utf-8")
         else:
             write_to = file
         write_to, rez = self.before_export(write_to, rez)
