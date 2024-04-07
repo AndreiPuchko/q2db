@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "q2db"
-version = "0.1.32"
+version = "0.1.33"
 description = "python DB API wrapper (MySQL, PostgreSQL, SQLite)"
 authors = ["Andrei Puchko <andrei.puchko@gmx.de>"]
 license = "Apache 2.0"
