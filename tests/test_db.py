@@ -320,7 +320,7 @@ def _test_impexp(database: Q2Db):
         assert table.row_count() == 11
 
         with pytest.raises(Exception, match="Import error:.*") as e:
-            with patch("builtins.open", mock_open(read_data="""name,price\ncsv import, 18+w""")) as filemock:
+            with patch("builtins.open", mock_open(read_data="""name;price\ncsv import; 18+w""")) as filemock:
                 table.import_csv("file.csv")
         assert table.row_count() == 11
 

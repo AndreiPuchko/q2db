@@ -359,7 +359,7 @@ class Q2Cursor:
 
     def _prepare_import(self, file):
         if not hasattr(file, "read"):
-            read_from = open(file)
+            read_from = open(file, encoding="utf-8")
         else:
             read_from = file
         return read_from
@@ -379,7 +379,7 @@ class Q2Cursor:
         """
         if self.table_name:
             read_from = self._prepare_import(file)
-            rows = csv.DictReader(read_from, dialect="excel")
+            rows = csv.DictReader(read_from, dialect="excel", delimiter=";")
             self.import_rows(rows, tick_callback)
 
     def import_rows(self, rows, tick_callback=None):
@@ -423,7 +423,9 @@ class Q2Cursor:
         """
         write_to, rez = self._prepare_export(file, tick_callback)
         if rez:
-            csv_writer = csv.DictWriter(write_to, [x for x in rez[0]], dialect="excel", lineterminator="\n")
+            csv_writer = csv.DictWriter(
+                write_to, [x for x in rez[0]], dialect="excel", lineterminator="\n", delimiter=";"
+            )
             csv_writer.writeheader()
             for x in rez:
                 csv_writer.writerow(x)
