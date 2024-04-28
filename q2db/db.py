@@ -684,6 +684,10 @@ class Q2Db:
             if aipk:
                 if self.db_engine_name == "sqlite3":
                     record[aipk] = self._cursor("SELECT last_insert_rowid() as aipk")[0]["aipk"]
+                elif self.db_engine_name == "mysql":
+                    record[aipk] = self._cursor("SELECT last_insert_id() as aipk")[0]["aipk"]
+                elif self.db_engine_name == "postgresql":
+                    record[aipk] = self._cursor("SELECT LASTVAL() as aipk")[0]["aipk"]
             if log and not table_name.upper().startswith("LOG_") and table_name.upper() != "PLATFORM":
                 self.raw_insert("log_" + table_name, record, _cursor)
             return True
@@ -838,7 +842,7 @@ class Q2Db:
         from first row  given table_name for where condition
         """
         column_name = f"({column_name}) as ret " if column_name else "*"
-        row = self._cursor(f"""select {column_name} from {table_name} where {where}""")
+        row = self._cursor(f"""select {column_name} from `{table_name}` where {where}""")
         if self.last_sql_error:
             return ""
         else:

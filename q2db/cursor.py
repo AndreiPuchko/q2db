@@ -29,7 +29,8 @@ import json
 import csv
 
 from datetime import datetime
-from q2db.utils import num
+from q2db.utils import num, int_
+import time
 import logging
 
 
@@ -245,7 +246,10 @@ class Q2Cursor:
         """
         pk_name = [x for x in self.primary_key_columns][0]
         pk_value = str(dataDic[pk_name])
+        t = time.time()
         for x in range(self.row_count()):
+            if time.time() - t > 0.5:
+                return 0
             if pk_name in self._rows[x]:
                 if self._rows[x][pk_name] == pk_value:
                     return x
@@ -493,6 +497,27 @@ class Q2MysqlCursor(Q2Cursor):
                     table_schema='{database_name}'
                     {where_clause}
                     """
+
+    def seek_primary_key_row(self, dataDic):
+        """
+        seek for row with primary kev == dataDic[pk]
+        return row index (row number)
+        """
+        pk_name = [x for x in self.primary_key_columns][0]
+        pk_value = str(dataDic[pk_name])
+        _sql = self.sql.replace("*", pk_name)
+        row_number = self.q2_db._cursor(
+            f"""
+                           select rownum
+                            from
+                            (
+                            select z1.*, @i := @i + 1 as rownum
+                            from ( {_sql} ) z1, (select @i:= -1) z2
+                            ) qq
+                            where {pk_name} = '{pk_value}'
+                           """
+        )
+        return int_(row_number[0]["rownum"])
 
 
 class Q2PostgresqlCursor(Q2Cursor):
