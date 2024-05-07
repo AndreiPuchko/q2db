@@ -108,7 +108,7 @@ def _test_get(database: Q2Db):
     assert database.get("just_table2", "uid=2+'xx'", "message") == ""
 
     assert not database.get_uniq_value("just_table2", "w1", 0)
-    assert database.get_uniq_value("just_table2", "uid", "44") == "44."
+    assert database.get_uniq_value("just_table2", "uid", "44") == "45"
 
     assert database.get_uniq_value("just_table", "uid", 15) == 2
     assert database.get_uniq_value("just_table", "uid", 1) == 2
