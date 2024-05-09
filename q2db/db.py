@@ -921,7 +921,7 @@ class Q2Db:
             dig = int_ if "int" in datatype else num
             return dig(self._cursor(sql, _cursor=_cursor).get(0, {}).get("pkvalue"))
         else:
-            _pkvalue_list = re.split("([^\d]+)", start_value)
+            _pkvalue_list = re.split(r"([^\d]+)", start_value)
             _base = "".join(_pkvalue_list[:-1])
             _suffix = num(_pkvalue_list[-1]) + 1
             value = f"{_base}{_suffix}"
