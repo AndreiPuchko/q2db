@@ -718,10 +718,52 @@ class Q2Db:
                         primary_key_value += 1
             record[pk] = primary_key_value
 
-    def update(self, table_name="", record={}):
+    def raw_update(self, table_name="", record={}, _cursor=None):
         """update from dictionary to table"""
         if not (table_name and record):
             return False
+
+        if _cursor is None:
+            _cursor = self.raw_cursor()
+
+        table_columns = self.get_database_columns(table_name)
+        primary_key_columns = self.get_primary_key_columns(table_name)
+
+        columns_list = [x for x in record if x in table_columns]
+        if is_sub_list(primary_key_columns.keys(), record.keys()):
+            sql = f"update {self.ec}{table_name}{self.ec} set " + ",".join(
+                [
+                    f" {self.ec}{x}{self.ec}=%s "
+                    for x in record
+                    if x not in primary_key_columns and x in columns_list
+                ]
+            )
+            sql += " where " + " and ".join([f" {self.ec}{x}{self.ec} = %s " for x in primary_key_columns])
+            if self.db_engine_name == "sqlite3":
+                sql = self._sqlite_patch(sql, record, table_columns)
+
+            self._check_record_for_numbers(table_name, record)
+            data = [record[x] for x in record if x not in primary_key_columns and x in columns_list]
+            data += [record[x] for x in primary_key_columns]
+
+            self._cursor(sql, data, _cursor)
+
+            if self.last_sql_error:
+                return False
+            else:
+                if not table_name.upper().startswith("LOG_") and table_name.upper() != "PLATFORM":
+                    self.raw_insert("log_" + table_name, dict(record), _cursor)
+                return True
+        else:
+            self.last_sql_error = "Update requires a primary key column!"
+
+    def update(self, table_name="", record={}, _cursor=None):
+        """update from dictionary to table"""
+        if not (table_name and record):
+            return False
+
+        if _cursor is None:
+            _cursor = self.raw_cursor()
 
         table_columns = self.get_database_columns(table_name)
         primary_key_columns = self.get_primary_key_columns(table_name)
@@ -763,20 +805,24 @@ class Q2Db:
             data = [record[x] for x in record if x not in primary_key_columns and x in columns_list]
             data += [record[x] for x in primary_key_columns]
 
-            self._cursor(sql, data)
+            self._cursor(sql, data, _cursor)
 
             if self.last_sql_error:
                 return False
             else:
                 if not table_name.upper().startswith("LOG_") and table_name.upper() != "PLATFORM":
-                    self.insert("log_" + table_name, dict(record))
+                    self.raw_insert("log_" + table_name, dict(record), _cursor)
                 return True
         else:
             self.last_sql_error = "Update requires a primary key column!"
 
-    def delete(self, table_name="", record={}):
+    def delete(self, table_name="", record={}, _cursor=None):
         if not (table_name and record):
             return False
+
+        if _cursor is None:
+            _cursor = self.raw_cursor()
+
         self.last_error_data = {}
         for x in self.db_schema.get_child_tables(table_name, record):
             x["escape_char"] = self.ec
@@ -817,20 +863,20 @@ class Q2Db:
         if self.db_engine_name == "sqlite3":
             select_sql = self._sqlite_patch(select_sql, record, table_columns)
 
-        row_to_be_deleted = self._cursor(select_sql, data)
+        row_to_be_deleted = self._cursor(select_sql, data, _cursor)
         if row_to_be_deleted == {}:
             return False
 
         for x in row_to_be_deleted:
             row_to_be_deleted[x]["q2_mode"] = "d"
             row_to_be_deleted[x]["q2_time"] = f"{self.cursor().now()}"
-            self.insert("log_" + table_name, row_to_be_deleted[x])
+            self.raw_insert("log_" + table_name, row_to_be_deleted[x], _cursor)
 
         sql = f"delete from {self.ec}{table_name}{self.ec} where {where_clause}"
         if self.db_engine_name == "sqlite3":
             sql = self._sqlite_patch(sql, record, table_columns)
 
-        self._cursor(sql, data)
+        self._cursor(sql, data, _cursor)
 
         if self.last_sql_error:  # pragma: no cover
             return False

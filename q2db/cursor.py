@@ -172,9 +172,16 @@ class Q2Cursor:
         _or_append(rez)
         return " or ".join(_or)
 
+    def raw_update(self, data, refresh=True, where=True):
+        if self.table_name:
+            rez = self.q2_db.raw_update(self.table_name, data, _cursor=self._cursor)
+            if refresh and rez:
+                self.refresh()
+            return rez
+
     def update(self, data, refresh=True, where=True):
         if self.table_name:
-            rez = self.q2_db.update(self.table_name, data)
+            rez = self.q2_db.update(self.table_name, data, _cursor=self._cursor)
             if refresh and rez:
                 self.refresh()
             return rez
@@ -196,7 +203,7 @@ class Q2Cursor:
 
     def delete(self, data, refresh=True):
         if self.table_name:
-            rez = self.q2_db.delete(self.table_name, data)
+            rez = self.q2_db.delete(self.table_name, data, _cursor=self._cursor)
             if rez is True and refresh:
                 self.refresh()
             return rez
