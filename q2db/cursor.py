@@ -356,7 +356,9 @@ class Q2Cursor:
             self._current_row = x
             yield self.record(x)
 
-    def record(self, row_number, columns=[]):
+    def record(self, row_number=None, columns=[]):
+        if row_number is None:
+            row_number = self._current_row
         if row_number in self._rows:
             if columns:
                 return {x: self._rows[row_number][x] for x in self._rows[row_number] if x in columns}
@@ -364,6 +366,9 @@ class Q2Cursor:
                 return self._rows[row_number]
         else:
             return {}
+
+    def get_record(self, row_number=None, columns=[]):
+        return self.record(row_number, columns)
 
     def get_columns(self):
         return [x for x in self.record(0)]

@@ -215,6 +215,8 @@ def _test_table(database: Q2Db):
     assert table.r.uid == "0"
     table.last()
     assert table.r.uid == "3"
+    assert table.record().get("uid") == "3"
+    assert table.get_record().get("uid") == "3"
     table.first()
     assert table.r.uid == "0"
     assert table.bof()
