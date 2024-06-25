@@ -302,6 +302,21 @@ class Q2Db:
         elif self.db_engine_name == "sqlite3":
             return self.get_database_columns(table_name, "pk=1")
 
+    def ensure_empty_pk(self, table="", row={}):
+        pk = self.get_primary_key_columns(table)
+        if pk:
+            key = list(pk.keys())[0]
+            if pk[key].get("ai"):
+                return
+            if pk[key].get("datatype") in ["char"]:
+                row[key] = ""
+            else:
+                row[key] = "0"
+            if "name" not in row:
+                row["name"] = "-"
+            if self.get(table, f"{key} = '{row[key]}'") == {}:
+                self.insert(table, row)
+
     def get_database_columns(self, table_name="", filter="", query_database=None):
         """returns database columns for given table"""
 
