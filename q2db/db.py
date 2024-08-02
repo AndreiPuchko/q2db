@@ -274,10 +274,10 @@ class Q2Db:
                 database=self.database_name, isolation_level=None, check_same_thread=False
             )
 
-        def concat(*arg):
-            return "".join(f"{x}" for x in arg)
+            def concat(*arg):
+                return "".join(f"{x}" for x in arg)
 
-        connection.create_function("concat", -1, concat)
+            connection.create_function("concat", -1, concat)
         return connection
 
     def _parse_url(self):
