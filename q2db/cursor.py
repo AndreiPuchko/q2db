@@ -367,6 +367,11 @@ class Q2Cursor:
         else:
             return {}
 
+    def refresh_record(self, row):
+        if isinstance(self._rows, lazy_rows):
+            if row in self._rows:
+                self._rows.fetch_row(row)
+
     def get_record(self, row_number=None, columns=[]):
         return self.record(row_number, columns)
 
