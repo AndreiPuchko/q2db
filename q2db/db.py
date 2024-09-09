@@ -925,7 +925,11 @@ class Q2Db:
             return False
         datatype = datatype.lower()
         if "int" in datatype or "dec" in datatype or "num" in datatype:
-            sql = f"""select coalesce((
+            sql = f"""select coalesce(
+                            (select {start_value} where not exists 
+                                (select 1 from {self.ec}{table_name}{self.ec} where {self.ec}{column}{self.ec}={start_value})
+                            ),
+                            (
                             select min({self.ec}{column}{self.ec}) +1 as pkvalue
                             from {self.ec}{table_name}{self.ec}
                             where {self.ec}{column}{self.ec} >=
@@ -936,7 +940,7 @@ class Q2Db:
                                         )
                                 and {self.ec}{column}{self.ec} + 1 not in
                                     (select {self.ec}{column}{self.ec} from {self.ec}{table_name}{self.ec})
-                        ), {start_value}) as pkvalue
+                        )) as pkvalue
                         """
             dig = int_ if "int" in datatype else num
             return dig(self._cursor(sql, _cursor=_cursor).get(0, {}).get("pkvalue"))
