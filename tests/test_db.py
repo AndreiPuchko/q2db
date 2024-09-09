@@ -110,7 +110,7 @@ def _test_get(database: Q2Db):
     assert not database.get_uniq_value("just_table2", "w1", 0)
     assert database.get_uniq_value("just_table2", "uid", "44") == "45"
 
-    assert database.get_uniq_value("just_table", "uid", 15) == 2
+    assert database.get_uniq_value("just_table", "uid", 15) == 15
     assert database.get_uniq_value("just_table", "uid", 1) == 2
 
 
@@ -280,7 +280,7 @@ def _test_table(database: Q2Db):
 
     assert table.seek_row({"price": "99.00", "name": "last record"}) == 7
     assert table.get_primary_key_columns() == ["uid"]
-    assert table.get_uniq_value("uid", 15) == 6
+    assert table.get_uniq_value("uid", 15) == 15
 
     assert table.get_next_sequence("uid", 15) == 6
     assert table.get_next_sequence("u id", 15) == 1
