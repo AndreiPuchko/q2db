@@ -927,7 +927,7 @@ class Q2Db:
         datatype = datatype.lower()
         if "int" in datatype or "dec" in datatype or "num" in datatype:
             sql = f"""select coalesce(
-                            (select {start_value} where not exists 
+                            (select {start_value} from (select 1) tmp where not exists
                                 (select 1 from {self.ec}{table_name}{self.ec} where {self.ec}{column}{self.ec}={start_value})
                             ),
                             (
