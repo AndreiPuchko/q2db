@@ -213,7 +213,8 @@ class Q2Db:
             if (version[0] * 10 + version[1]) > 55 or "MariaDB" in self.connection.get_server_info():
                 self._cursor("CREATE USER IF NOT EXISTS %s IDENTIFIED BY %s", (self.user, self.password))
             else:
-                self._cursor("CREATE USER %s IDENTIFIED BY %s", (self.user, self.password))
+                if self._cursor("SELECT user FROM mysql.user where user =%s", (self.user,)) == {}:
+                    self._cursor("CREATE USER %s IDENTIFIED BY %s", (self.user, self.password))
             self.raise_sql_error()
             self._cursor(sql=f"CREATE DATABASE IF NOT EXISTS {escape_sql_string(self.database_name)}")
             self.raise_sql_error()
