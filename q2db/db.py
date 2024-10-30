@@ -564,8 +564,11 @@ class Q2Db:
     def _sqlite_patch(self, sql, record, table_columns):
         """Adapt sql statement for sqlite - convert str to int, replace placeholder character to ?"""
         for x in record:
-            if "int" == table_columns.get(x, {}).get("datatype", "").lower()[:3]:
+            datatype = table_columns.get(x, {}).get("datatype", "").lower()
+            if "int" == datatype[:3]:
                 record[x] = int_(record[x])
+            elif "dec" in datatype or "num" in datatype:
+                record[x] = f"{record[x]}"
         sql = sql.replace("%s", "?")
         return sql
 
