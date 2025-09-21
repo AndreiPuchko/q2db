@@ -323,6 +323,17 @@ class Q2Db:
             if self.get(table, f"{key} = '{row[key]}'") == {}:
                 self.insert(table, row)
 
+    def ensure_record(self,  table_name="", where="", record={}):
+        row = self._cursor(f"""select * from `{table_name}` where {where}""")
+        if row == {}:
+            self.insert(table_name, record)
+        else:
+            record.update(row[0])
+        return record
+
+    def print_last_sql_error(self):
+        if self.last_sql_error: print(self.last_sql_error)
+
     def get_database_columns(self, table_name="", filter="", query_database=None):
         """returns database columns for given table"""
 

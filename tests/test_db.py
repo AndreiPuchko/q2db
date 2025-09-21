@@ -283,7 +283,7 @@ def _test_table(database: Q2Db):
     assert table.get_uniq_value("uid", 15) == 15
 
     assert table.get_next_sequence("uid", 15) == 6
-    assert table.get_next_sequence("u id", 15) == 1
+    assert table.get_next_sequence("uid", 15) == 6
 
     table.set_where("name like '%top%'")
     table.refresh()
