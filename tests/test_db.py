@@ -81,6 +81,7 @@ def prepare_dataset(database: Q2Db):
 
     assert database.insert("just_table2", {"uid": 33, "name": "1"})
     assert database.insert("just_table2", {"uid": 33, "name": "2"})
+    database.get("topic_table", "uid=1", "concat(name, q2_time)")
 
     database.db_schema = None
     database.migrate_schema()
@@ -432,7 +433,7 @@ def test_wrongdb():
 
 
 if __name__ == "__main__":  # pragma: no cover
-    test_mysql()
-    test_postgresql()
+    # test_mysql()
+    # test_postgresql()
     test_sqlite()
-    test_wrongdb()
+    # test_wrongdb()

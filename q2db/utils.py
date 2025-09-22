@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 from decimal import Decimal
+import re
 
 
 def is_sub_list(sublst, lst):
@@ -31,3 +32,43 @@ def num(tonum):
         return Decimal(f"{tonum}")
     except Exception:
         return 0
+
+
+TOKEN_PATTERN = re.compile(
+    r"""
+    (?P<space>\s+)|
+    (?P<op><=|>=|<>|!=|=|<|>|LIKE|IN|AND|OR)|
+    (?P<str>'(?:[^']|''|\\')*')|
+    (?P<num>\d+(\.\d+)?)|
+    (?P<ident>[A-Za-z_][A-Za-z0-9_]*|\*)|
+    (?P<paren>[()])|
+    (?P<comma>,)
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def parse_where(where: str):
+    params = []
+    result_sql = []
+
+    for match in TOKEN_PATTERN.finditer(where):
+        kind = match.lastgroup
+        value = match.group()
+
+        if kind == "space":
+            result_sql.append(" ")
+        elif kind in ("op", "ident", "paren", "comma"):
+            result_sql.append(value)
+        elif kind == "str":
+            # remove quotes, unescape, append as parameter
+            unquoted = value[1:-1].replace("''", "'")
+            params.append(unquoted)
+            result_sql.append("%s")
+        elif kind == "num":
+            params.append(float(value) if "." in value else int(value))
+            result_sql.append("%s")
+        else:
+            raise ValueError(f"Unexpected token: {value}")
+
+    return "".join(result_sql), tuple(params)

@@ -17,17 +17,14 @@ import sys
 
 if __name__ == "__main__":  # pragma: no cover
 
-    sys.path.insert(0, ".")
-
-    from demo.demo_postgresql import demo
+    # sys.path.insert(0, ".")
 
     # from demo.demo_postgresql import demo
-
-    # from demo.demo_sqlite import demo
+    # from demo.demo_postgresql import demo
+    from demo.demo_sqlite import demo
 
     demo()
     # from temp.try_pg_01 import demo
-
     # from tests.test_db import test_mysql, test_postgresql, test_sqlite
     # test_mysql()
     # test_sqlite()
@@ -40,7 +37,7 @@ import sqlparse
 # import mysql.connector as db_mysql_connector
 # import psycopg2 as db_postgresql_connector
 
-from q2db.utils import int_, is_sub_list, num
+from q2db.utils import int_, is_sub_list, num, parse_where
 from q2db.cursor import Q2MysqlCursor, Q2SqliteCursor, Q2PostgresqlCursor
 from q2db.schema import Q2DbSchema
 
@@ -51,6 +48,16 @@ def escape_sql_string(s):
         return s.replace("\\", "\\\\\\\\").replace("'", "\\'").replace('"', '\\"')
     else:
         return s
+
+
+_VALID_SQL_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def safe_identifier(name: str) -> str:
+    """Return a safe SQL identifier or raise ValueError."""
+    if not _VALID_SQL_IDENT.match(name.strip()):
+        raise ValueError(f"Unsafe SQL identifier: {name!r}")
+    return name
 
 
 class Q2Db:
@@ -120,6 +127,7 @@ class Q2Db:
         self.db_schema = None
         self.connection = None
         self.ec = '"'
+        self.ph = "%s"
 
         if self.db_engine_name == "mysql":
             try:
@@ -143,6 +151,7 @@ class Q2Db:
         elif self.db_engine_name == "sqlite3":
             self.db_api_engine = db_sqlite_connector
             self.db_cursor_class = Q2SqliteCursor
+            self.ph = "?"
 
         if create_only:
             self.create()
@@ -173,7 +182,7 @@ class Q2Db:
 
     @staticmethod
     def get_system_database_name(db_engine_name):
-        return {"mysql": "mysql", "postgresql": "postgres"}[db_engine_name]
+        return {"mysql": "mysql", "postgresql": "postgres"}.get(db_engine_name, None)
 
     @staticmethod
     def get_default_admin_name(db_engine_name):
@@ -308,22 +317,27 @@ class Q2Db:
         elif self.db_engine_name == "sqlite3":
             return self.get_database_columns(table_name, "pk=1")
 
-    def ensure_empty_pk(self, table="", row={}):
-        pk = self.get_primary_key_columns(table)
+    def ensure_empty_pk(self, table_name="", record={}):
+        if not (table_name):
+            return False
+        pk = self.get_primary_key_columns(table_name)
         if pk:
             key = list(pk.keys())[0]
             if pk[key].get("ai"):
                 return
             if pk[key].get("datatype") in ["char"]:
-                row[key] = ""
+                record[key] = ""
             else:
-                row[key] = "0"
-            if "name" not in row:
-                row["name"] = "-"
-            if self.get(table, f"{key} = '{row[key]}'") == {}:
-                self.insert(table, row)
+                record[key] = "0"
+            if "name" not in record:
+                record["name"] = "-"
+            if self.get(table_name, f"{key} = '{record[key]}'") == {}:
+                self.insert(table_name, record)
 
-    def ensure_record(self,  table_name="", where="", record={}):
+    def ensure_record(self, table_name="", where="", record={}):
+        if not (table_name and record):
+            return False
+        table_name = safe_identifier(table_name)
         row = self._cursor(f"""select * from `{table_name}` where {where}""")
         if row == {}:
             self.insert(table_name, record)
@@ -332,11 +346,14 @@ class Q2Db:
         return record
 
     def print_last_sql_error(self):
-        if self.last_sql_error: print(self.last_sql_error)
+        if self.last_sql_error:
+            print(self.last_sql_error)
 
     def get_database_columns(self, table_name="", filter="", query_database=None):
         """returns database columns for given table"""
-
+        if not (table_name):
+            return False
+        table_name = safe_identifier(table_name)
         table_name = escape_sql_string(table_name)
         if table_name.upper().startswith("LOG_"):
             table_name = table_name[4:]
@@ -389,18 +406,19 @@ class Q2Db:
         _tables = [x for x in self.db_schema.get_schema_tables()]
         db_only_tables = [x for x in self.get_tables() if x not in _tables]
         _tables += db_only_tables
-        for table in _tables:
+        for table_name in _tables:
             # column that are already in
             # if table == 'sqlite_sequence':
             #     continue
-            database_columns = self.get_database_columns(table, query_database=True)
-            schema_columns = self.db_schema.get_schema_columns(table)
-            if not self.guest_mode and table not in db_only_tables:
+            database_columns = self.get_database_columns(table_name, query_database=True)
+            schema_columns = self.db_schema.get_schema_columns(table_name)
+            if not self.guest_mode and table_name not in db_only_tables:
                 self._add_q2_columns(schema_columns)
             for column in schema_columns:
-                colDic = self.db_schema.get_schema_attr(table, column)
+                column = safe_identifier(column)
+                colDic = self.db_schema.get_schema_attr(table_name, column)
                 if column not in database_columns:  # new column
-                    colDic["table"] = table
+                    colDic["table"] = table_name
                     colDic["column"] = column
                     self.create_column(colDic)
                 else:  # change schema as it is in database
@@ -411,7 +429,7 @@ class Q2Db:
 
             for column in database_columns:  # pull columns from db
                 if column not in schema_columns:
-                    database_columns[column]["table"] = table
+                    database_columns[column]["table"] = table_name
                     self.db_schema.add(database_columns[column])
         self.migrate_indexes()
         return True
@@ -499,16 +517,17 @@ class Q2Db:
         sql_column_text = self.column_defintion(column_definition)
         if sql_column_text is None:
             return False
-        table = column_definition["table"]
+        table_name = column_definition["table"]
+        table_name = safe_identifier(table_name)
 
-        if table in self.get_tables(table):
-            sql_cmd = f"ALTER TABLE {self.ec}{table}{self.ec} ADD {sql_column_text}"
+        if table_name in self.get_tables(table_name):
+            sql_cmd = f"ALTER TABLE {self.ec}{table_name}{self.ec} ADD {sql_column_text}"
         else:
-            sql_cmd = f"CREATE TABLE {self.ec}{table}{self.ec} ({sql_column_text})"
+            sql_cmd = f"CREATE TABLE {self.ec}{table_name}{self.ec} ({sql_column_text})"
         if not self.run_migrate_sql(sql_cmd):
             return False
 
-        if not self.guest_mode and not table.upper().startswith("LOG_"):
+        if not self.guest_mode and not table_name.upper().startswith("LOG_"):
             self.create_index(column_definition)
 
             log_column_definition = dict(column_definition)
@@ -521,11 +540,13 @@ class Q2Db:
 
     def alter_column(self, column_definition):
         sql_column_text = self.column_defintion(column_definition)
-        table = column_definition["table"]
+        table_name = column_definition["table"]
+        table_name = safe_identifier(table_name)
         column = column_definition["column"]
+        column = safe_identifier(column)
         self.migrate_error_list = []
         sql_cmd = (
-            f"ALTER TABLE {self.ec}{table}{self.ec} "
+            f"ALTER TABLE {self.ec}{table_name}{self.ec} "
             f"change column {self.ec}{column}{self.ec} {sql_column_text}"
         )
         if not self.run_migrate_sql(sql_cmd):
@@ -583,12 +604,12 @@ class Q2Db:
         sql = sql.replace("%s", "?")
         return sql
 
-    def _check_record_for_numbers(self, table, record):
+    def _check_record_for_numbers(self, table_name, record):
         """ "makes sure that all number columns value is not blank string"""
         for x in record:
             if record[x] != "":
                 continue
-            datatype = self.db_schema.get_schema_attr(table, x).get("datatype", "").lower()
+            datatype = self.db_schema.get_schema_attr(table_name, x).get("datatype", "").lower()
             if "int" in datatype or "dec" in datatype or "num" in datatype:
                 record[x] = "0"
 
@@ -605,6 +626,7 @@ class Q2Db:
         """insert dicti or list of dict into table"""
         if table_name == "":
             return False
+        table_name = safe_identifier(table_name)
         table_columns = self.get_database_columns(table_name[:])
         if isinstance(record, dict):
             columns_list = [x for x in record if x in table_columns]
@@ -648,6 +670,7 @@ class Q2Db:
         """
         if not (table_name and record):
             return False
+        table_name = safe_identifier(table_name)
 
         if _cursor is None:
             _cursor = self.raw_cursor()
@@ -662,7 +685,6 @@ class Q2Db:
                 self.get(
                     x["primary_table"],
                     "{escape_char}{primary_column}{escape_char}= '{child_value}' ".format(**x),
-                    x["child_value"],
                 )
                 == {}
             ):
@@ -757,6 +779,7 @@ class Q2Db:
         """update from dictionary to table"""
         if not (table_name and record):
             return False
+        table_name = safe_identifier(table_name)
 
         if _cursor is None:
             _cursor = self.raw_cursor()
@@ -796,6 +819,7 @@ class Q2Db:
         """update from dictionary to table"""
         if not (table_name and record):
             return False
+        table_name = safe_identifier(table_name)
 
         if _cursor is None:
             _cursor = self.raw_cursor()
@@ -810,6 +834,8 @@ class Q2Db:
             for x in foreign_keys_list:
                 if x["child_column"] not in record:  # column not going to change - skip checking
                     continue
+                x["child_column"] = safe_identifier(x["child_column"])
+                x["primary_table"] = safe_identifier(x["primary_table"])
                 if self.get(x["primary_table"], "%(primary_column)s='%(child_value)s'" % x) == {}:
                     self.last_sql_error = (
                         "Foreign key error for update:"
@@ -854,6 +880,7 @@ class Q2Db:
     def delete(self, table_name="", record={}, _cursor=None):
         if not (table_name and record):
             return False
+        table_name = safe_identifier(table_name)
 
         if _cursor is None:
             _cursor = self.raw_cursor()
@@ -861,12 +888,14 @@ class Q2Db:
         self.last_error_data = {}
         for x in self.db_schema.get_child_tables(table_name, record):
             x["escape_char"] = self.ec
-            rez = self._cursor(
-                """select 1 from {escape_char}{child_table}{escape_char}
-                    where {escape_char}{child_column}{escape_char}='{parent_value}'""".format(
-                    **x
-                )
+            x["place_holder"] = self.ph
+            x["child_table"] = safe_identifier(x["child_table"])
+            x["child_column"] = safe_identifier(x["child_column"])
+            sql = """select 1 from {escape_char}{child_table}{escape_char}
+                    where {escape_char}{child_column}{escape_char}={place_holder}""".format(
+                **x
             )
+            rez = self._cursor(sql, (x["parent_value"],))
             if {} != rez:
                 self.last_sql_error = (
                     "Foreign key error for delete:"
@@ -922,8 +951,18 @@ class Q2Db:
         """returns value of given column or record dictionary
         from first row  given table_name for where condition
         """
+        if not (table_name):
+            return False
         column_name = f"({column_name}) as ret " if column_name else "*"
-        row = self._cursor(f"""select {column_name} from `{table_name}` where {where}""")
+        table_name = safe_identifier(table_name)
+        where, data = parse_where(where)
+        parsed_column_name, column_data = parse_where(column_name)
+        if column_data:
+            data = column_data + data
+            column_name = parsed_column_name
+        if self.db_engine_name == "sqlite3":
+            where = where.replace("%s", "?")
+        row = self._cursor(f"""select {column_name} from `{table_name}` where {where}""", data=data)
         if self.last_sql_error:
             return ""
         else:
@@ -935,11 +974,14 @@ class Q2Db:
         return {}
 
     def get_uniq_value(self, table_name, column, start_value, _cursor=None):
+        table_name = safe_identifier(table_name)
+        column = safe_identifier(column)
         datatype = self.db_schema.get_schema_attr(table_name, column).get("datatype")
         if datatype is None:
             return False
         datatype = datatype.lower()
         if "int" in datatype or "dec" in datatype or "num" in datatype:
+            start_value = num(start_value)
             sql = f"""select coalesce(
                             (select {start_value} from (select 1) tmp where not exists
                                 (select 1 from {self.ec}{table_name}{self.ec} where {self.ec}{column}{self.ec}={start_value})
