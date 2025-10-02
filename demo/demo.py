@@ -159,6 +159,18 @@ def demo(demo_database: Q2Db):
     print(schema.get_schema_table_attr("message_table").keys())
     print(schema.get_schema_table_attr("message_table").get("f6"))
 
+    print("==")
+    cu1 = demo_database.cursor(sql="select * from topic_table where name like '%2%' order by name")
+    print(demo_database.last_sql)
+    print(cu1.row_count())
+    print(cu1.record(0))
+
+    cu1 = demo_database.cursor(sql="select * from topic_table where name like %s order by name", data=["%2%"])
+    print(demo_database.last_sql)
+    print(demo_database.last_record)
+    print(cu1.row_count())
+    print(cu1.record(0))
+
 
 if __name__ == "__main__":
     demo(Q2Db("sqlite3", database_name=":memory:"))
