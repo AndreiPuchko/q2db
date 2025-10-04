@@ -167,6 +167,20 @@ def escape_sql_string(s):
 _VALID_SQL_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
+def parse_where(where=""):
+    if isinstance(where, str):
+        where, data = parse_sql(where)
+    elif isinstance(where, (list, tuple)):
+        where = where[0]
+        if len(where) > 1:
+            data = where[1]
+            if not isinstance(data, (list, tuple)):
+                data = (data,)
+        else:
+            data = tuple()
+    return where, data
+
+
 def safe_identifier(name: str) -> str:
     """Return a safe SQL identifier or raise ValueError."""
     if not _VALID_SQL_IDENT.match(name.strip()):

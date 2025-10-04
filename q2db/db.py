@@ -36,7 +36,7 @@ import sqlite3 as db_sqlite_connector
 # import mysql.connector as db_mysql_connector
 # import psycopg2 as db_postgresql_connector
 
-from q2db.utils import int_, is_sub_list, num, parse_sql, escape_sql_string, safe_identifier
+from q2db.utils import int_, is_sub_list, num, parse_sql, escape_sql_string, safe_identifier, parse_where
 from q2db.cursor import Q2MysqlCursor, Q2SqliteCursor, Q2PostgresqlCursor
 from q2db.schema import Q2DbSchema
 
@@ -319,7 +319,9 @@ class Q2Db:
         if not (table_name and record):
             return False
         table_name = safe_identifier(table_name)
-        row = self._cursor(f"""select * from `{table_name}` where {where}""")
+        where, data = parse_where(where)
+        row = self._cursor(f"""select * from `{table_name}` where {where}""", data=data)
+        # row = self._cursor(f"""select * from `{table_name}` where {where}""")
         if row == {}:
             self.insert(table_name, record)
         else:
@@ -935,24 +937,18 @@ class Q2Db:
         """
         if not (table_name):
             return False
+        
         if not column_name:
             column_name = "*"
         elif "," not in column_name:
             column_name = f"({column_name}) as ret "
+            
         table_name = safe_identifier(table_name)
-        if isinstance(where, str):
-            where, data = parse_sql(where)
-        elif isinstance(where, (list, tuple)):
-            data = where[1]
-            where = where[0]
-            if not isinstance(data, (list, tuple)):
-                data = [data]
+        where, data = parse_where(where)
         parsed_column_name, column_data = parse_sql(column_name)
         if column_data:
             data = column_data + data
             column_name = parsed_column_name
-        # if self.db_engine_name == "sqlite3":
-        #     where = where.replace("%s", "?")
         row = self._cursor(f"""select {column_name} from `{table_name}` where {where}""", data=data)
         if self.last_sql_error:
             return ""
