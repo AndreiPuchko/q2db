@@ -937,12 +937,8 @@ class Q2Db:
         """
         if not (table_name):
             return False
-        
         if not column_name:
             column_name = "*"
-        elif "," not in column_name:
-            column_name = f"({column_name}) as ret "
-            
         table_name = safe_identifier(table_name)
         where, data = parse_where(where)
         parsed_column_name, column_data = parse_sql(column_name)
@@ -954,10 +950,10 @@ class Q2Db:
             return ""
         else:
             if row:
-                if column_name == "*" or "," in column_name:
+                if len(row[0]) > 1:
                     return row[0]
                 else:
-                    return row[0]["ret"]
+                    return list(row[0].values())[0]
         return {}
 
     def get_uniq_value(self, table_name, column, start_value, _cursor=None):
