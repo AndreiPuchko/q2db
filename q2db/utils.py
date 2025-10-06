@@ -171,13 +171,13 @@ def parse_where(where=""):
     if isinstance(where, str):
         where, data = parse_sql(where)
     elif isinstance(where, (list, tuple)):
-        where = where[0]
         if len(where) > 1:
             data = where[1]
             if not isinstance(data, (list, tuple)):
                 data = (data,)
         else:
             data = tuple()
+        where = where[0]
     return where, data
 
 
