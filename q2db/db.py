@@ -423,10 +423,12 @@ class Q2Db:
         """adding q2-columns to the q2-schema"""
         schema_columns["q2_time"] = {"datatype": "bigint"}
         schema_columns["q2_mode"] = {"datatype": "char", "datalen": 1}
+        schema_columns["q2_hidden"] = {"datatype": "char", "datalen": 1}
+        # schema_columns["q2_lock"] = {"datatype": "char", "datalen": 1}
+        
         # schema_columns["update_time"] = {"datatype": "bigint"}
         # schema_columns["insert_session_id"] = {"datatype": "int"}
         # schema_columns["update_session_id"] = {"datatype": "int"}
-        # schema_columns["user_lock"] = {"datatype": "char", "datalen": 1}
         pass
 
     def column_definition(self, column_definition):

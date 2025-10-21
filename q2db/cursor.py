@@ -83,6 +83,10 @@ class Q2Cursor:
         self.order = order
         self.primary_key_columns = []
         self.where = where
+
+        self.q2_hidden_row_status = ""
+        self.set_hidden_row_status()
+
         self.data = data
         self.cache_flag = cache_flag
         self._rows = {}
@@ -93,6 +97,16 @@ class Q2Cursor:
         self.refresh()
         self.r = Record(self)
         self.tick_callback = None
+
+    def set_hidden_row_status(self, status=""):
+        if (
+            status == ""
+            and self.table_name
+            and self.q2_db.db_schema.get_schema_table_attr(self.table_name, "q2_hidden")
+        ):
+            self.q2_hidden_row_status = "show_not_hidden"
+        else:
+            self.q2_hidden_row_status = status
 
     def transaction(self):
         self.q2_db.transaction()
@@ -326,8 +340,13 @@ class Q2Cursor:
         if self.table_name:
             self.primary_key_columns = [x for x in self.q2_db.get_primary_key_columns(self.table_name)]
             self.sql = f"select * from {self.ec}{self.table_name}{self.ec}"
-            if self.where:
-                self.sql += f" where {self.where}"
+            tmp_where = self.where
+            if self.q2_hidden_row_status == "show_not_hidden":
+                tmp_where = (f"({tmp_where}) and " if tmp_where else "") + " q2_hidden='' "
+            elif self.q2_hidden_row_status == "show_hidden":
+                tmp_where = (f"({tmp_where}) and " if tmp_where else "") + " q2_hidden<>'' "
+            if tmp_where:
+                self.sql += f" where {tmp_where}"
             if self.order:
                 self.sql += f" order by {self.order}"
 
