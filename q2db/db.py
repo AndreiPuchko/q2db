@@ -424,6 +424,8 @@ class Q2Db:
         schema_columns["q2_time"] = {"datatype": "bigint"}
         schema_columns["q2_mode"] = {"datatype": "char", "datalen": 1}
         schema_columns["q2_hidden"] = {"datatype": "char", "datalen": 1}
+        schema_columns["q2_bcolor"] = {"datatype": "bigint"}
+        schema_columns["q2_fcolor"] = {"datatype": "bigint"}
         # schema_columns["q2_lock"] = {"datatype": "char", "datalen": 1}
         
         # schema_columns["update_time"] = {"datatype": "bigint"}
@@ -549,6 +551,7 @@ class Q2Db:
             column_definition.get("index")
             or column_definition.get("column") == "name"
             or column_definition.get("column") == "date"
+            or column_definition.get("column") == "q2_hidden"
             or column_definition.get("to_table")
         ):
             column_definition["escape_char"] = self.ec
