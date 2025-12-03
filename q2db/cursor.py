@@ -375,6 +375,9 @@ class Q2Cursor:
             self._current_row = x
             yield self.record(x)
 
+    def get_rows(self):
+        return [x for x in self.records()]
+
     def record(self, row_number=None, columns=[]):
         if row_number is None:
             row_number = self._current_row
