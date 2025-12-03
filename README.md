@@ -1,25 +1,18 @@
 [![Python application](https://github.com/AndreiPuchko/q2db/actions/workflows/main.yml/badge.svg)](https://github.com/AndreiPuchko/q2db/actions/workflows/main.yml)
-# The light Python DB API wrapper with some ORM functions (MySQL, PostgreSQL, SQLite)
-## Quick start (run demo files)
-## - in docker:
-```bash
-git clone https://github.com/AndreiPuchko/q2db && cd q2db/database.docker
-./up.sh
-./down.sh
-```  
-## - on your system:
-```bash
-pip install q2db
-git clone https://github.com/AndreiPuchko/q2db && cd q2db
-# sqlite:
-python3 ./demo/demo.py
-# mysql and postgresql:
-pip install mysql-connector-python psycopg2-binary
-pushd database.docker && docker-compose up -d && popd
-python3 ./demo/demo_mysql.py
-python3 ./demo/demo_postgresql.py
-pushd database.docker && docker-compose down -v && popd
-```
+
+# Q2DB: Lightweight Python DB API Wrapper & ORM
+
+Q2DB is a lightweight Python library that wraps standard DB API connectors for MySQL, PostgreSQL, and SQLite, providing a simple ORM-like interface for database operations. It enables easy schema definition and migration, supports basic CRUD operations, and offers a convenient cursor abstraction for querying and manipulating data. Q2DB is designed for rapid prototyping, small projects, and educational purposes, focusing on simplicity and minimal configuration.
+
+Key features include:
+- Unified API for MySQL, PostgreSQL, and SQLite
+- Schema definition and migration (ADD COLUMN only)
+- Simple ORM-like CRUD operations (insert, update, delete, get)
+- Foreign key checks and logging of changes
+- Cursor abstraction for flexible queries and record navigation
+- Docker support for quick setup and testing
+
+
 # Features:
  ---
 ## Connect
