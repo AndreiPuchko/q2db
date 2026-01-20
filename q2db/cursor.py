@@ -29,7 +29,7 @@ import json
 import csv
 
 from datetime import datetime
-from q2db.utils import num, int_
+from q2db.utils import num, int_, apply_where_defaults
 import time
 import logging
 
@@ -206,10 +206,8 @@ class Q2Cursor:
 
     def insert(self, data, refresh=True, where=True, log=True):
         if self.table_name:
-            if self.where and where:
-                for x in re.split(" and ", self.where, flags=re.IGNORECASE):
-                    if x.count("=") == 1 and " OR " not in x.upper():
-                        data[x.split("=")[0].strip()] = eval(x.split("=")[1])
+            if where:
+                apply_where_defaults(data, self.where)
             rez = self.q2_db.insert(self.table_name, data, _cursor=self._cursor, log=log)
             if refresh and rez:
                 self.refresh()

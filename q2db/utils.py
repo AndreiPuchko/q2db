@@ -15,6 +15,7 @@
 from decimal import Decimal
 import re
 from typing import List, Optional, Tuple
+import ast
 
 
 def is_sub_list(sublst, lst):
@@ -188,14 +189,62 @@ def safe_identifier(name: str) -> str:
     return name
 
 
-if __name__ == "__main__":
-    # sql = "select coalesce( (select 99 from (select  1) tmp where not exists (select 1 from `topic_table` where `uid`=99) ), ( select min(`uid`) +1 as pkvalue from `topic_table`  where `uid` >= ( select max(`uid`) from `topic_table` where `uid`<=99 )  and `uid` + 1 not in (select `uid` from `topic_table`) )) as pkvalue"
-    # sql = "select rownum  from  (  select z1.*, @i := @i + 1 as rownum  from ( select uid from `topic_table` order by uid ) z1, (select @i:= -1) z2  ) qq  where uid = '3'"
-    # sql = """select name, type as datatype, `notnull` as nn , (SELECT "*" FROM sqlite_master WHERE tbl_name="topic_table" and ww.pk=1 and sql LIKE "%AUTOINCREMENT%") as ai  from PRAGMA_table_info("topic_table") ww"""
-    # sql = """insert into "topic_table" ("name","q2_time","q2_mode","uid") values (1,2,3,4) """
-    # sql = """insert into "topic_table" ("name","uid","q2_time","q2_mode") values (%s,%s,%s,%s) """
-    sql = """sql  LIKE  "%AUTOINCREMENT%" """
-    nsql, data = parse_sql(sql)
-    print(sql)
-    print(nsql)
-    print(data)
+def apply_where_defaults(data: dict, where: str) -> None:
+    """
+    Forcibly applies to data only simple conditions of the form:
+        field = literal
+
+    Ignores everything else, including:
+        - IN (...)
+        - SELECT / subqueries
+        - OR
+        - >, <, >=, <=
+        - expressions and functions
+
+    Modifies data in place.
+    """
+
+    if not where:
+        return
+
+    simple_eq_re = re.compile(
+        r"""
+        ^\s*
+        (?P<field>[a-zA-Z_][a-zA-Z0-9_]*)
+        \s*=\s*
+        (?P<value>
+            '[^']*' |
+            "[^"]*" |
+            \d+(\.\d+)? |
+            NULL
+        )
+        \s*$
+        """,
+        re.VERBOSE | re.IGNORECASE,
+    )
+
+    def parse_literal(value: str):
+        value = value.strip()
+        if value.upper() == "NULL":
+            return None
+        try:
+            return ast.literal_eval(value)
+        except Exception:
+            return None
+
+    for clause in re.split(r"\s+and\s+", where, flags=re.IGNORECASE):
+        upper = clause.upper()
+
+        # жёсткий фильтр сложных условий
+        if " OR " in upper or " IN " in upper or " SELECT " in upper or ">" in clause or "<" in clause:
+            continue
+
+        m = simple_eq_re.match(clause)
+        if not m:
+            continue
+
+        field = m.group("field")
+        value = parse_literal(m.group("value"))
+
+        if value is not None:
+            data[field] = value
