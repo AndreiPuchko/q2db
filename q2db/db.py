@@ -16,7 +16,6 @@
 import sys
 
 if __name__ == "__main__":  # pragma: no cover
-
     # sys.path.insert(0, ".")
 
     # from demo.demo_postgresql import demo
@@ -427,7 +426,7 @@ class Q2Db:
         schema_columns["q2_bcolor"] = {"datatype": "bigint"}
         schema_columns["q2_fcolor"] = {"datatype": "bigint"}
         # schema_columns["q2_lock"] = {"datatype": "char", "datalen": 1}
-        
+
         # schema_columns["update_time"] = {"datatype": "bigint"}
         # schema_columns["insert_session_id"] = {"datatype": "int"}
         # schema_columns["update_session_id"] = {"datatype": "int"}
@@ -496,9 +495,7 @@ class Q2Db:
                                 {datatype} {size}
                                 {primarykey}
                                 {autoincrement}
-                                {default}""".format(
-            **_column_definition
-        )
+                                {default}""".format(**_column_definition)
         return sql_column_text
 
     def create_column(self, column_definition):
@@ -804,6 +801,37 @@ class Q2Db:
         else:
             self.last_sql_error = "Update requires a primary key column!"
 
+    def upsert(self, table_name: str = "", where: str = "", record: dict = {}, _cursor=None):
+        """
+        Insert record if no row matches WHERE,
+        otherwise update matched row(s).
+
+        Returns resulting record dict.
+        """
+        if not (table_name and record):
+            return False
+
+        table_name = safe_identifier(table_name)
+
+        if _cursor is None:
+            _cursor = self.raw_cursor()
+
+        where_sql, where_data = parse_where(where)
+
+        rows = self._cursor(
+            f"SELECT * FROM `{table_name}` WHERE {where_sql}", data=where_data, _cursor=_cursor
+        )
+
+        if not rows:
+            self.insert(table_name, record, _cursor=_cursor)
+            return record
+
+        self.update(table_name, record, _cursor=_cursor)
+
+        result = rows[0].copy()
+        result.update(record)
+        return result
+
     def update(self, table_name="", record={}, _cursor=None):
         """update from dictionary to table"""
         if not (table_name and record):
@@ -881,9 +909,7 @@ class Q2Db:
             x["child_table"] = safe_identifier(x["child_table"])
             x["child_column"] = safe_identifier(x["child_column"])
             sql = """select 1 from {escape_char}{child_table}{escape_char}
-                    where {escape_char}{child_column}{escape_char}={place_holder}""".format(
-                **x
-            )
+                    where {escape_char}{child_column}{escape_char}={place_holder}""".format(**x)
             rez = self._cursor(sql, (x["parent_value"],))
             if {} != rez:
                 self.last_sql_error = (
