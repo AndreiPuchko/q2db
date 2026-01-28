@@ -154,7 +154,7 @@ class Q2Cursor:
             sql = f"select {f} from {self.ec}{self.table_name}{self.ec} where "
             if self.where:
                 sql += f" {self.where} and "
-            sql += f" ({self.prepare_column_search(column,text)}) "
+            sql += f" ({self.prepare_column_search(column, text)}) "
             if self.order:
                 sql += f" order by {self.order}"
             _rows = self.q2_db._cursor(f"""{sql}""", _cursor=self._cursor)
@@ -314,15 +314,15 @@ class Q2Cursor:
                     select max({self.ec}{column}{self.ec})
                     from {self.ec}{self.table_name}{self.ec}
                     where {self.ec}{column}{self.ec}<={start_value}
-                            {'and (' if self.where else '' } {self.where} {')' if self.where else '' }
+                            {"and (" if self.where else ""} {self.where} {")" if self.where else ""}
                 )
                 and {column}+1 not in
                     (
                     select {column}
                     from {self.ec}{self.table_name}{self.ec}
-                    {'where' if self.where else '' } {self.where}
+                    {"where" if self.where else ""} {self.where}
                     )
-                {'and' if self.where else '' } {self.where}
+                {"and" if self.where else ""} {self.where}
             """
             try:
                 seq = num(self.q2_db.cursor(sql).record(0)["seq"])
@@ -352,7 +352,7 @@ class Q2Cursor:
             pk = self.primary_key_columns[0]
             self._rows = lazy_rows(
                 self.q2_db._cursor(
-                    f"{self.sql.replace(' * ', ' '+pk+ ' ')}", self.data, _cursor=self._cursor
+                    f"{self.sql.replace(' * ', ' ' + pk + ' ')}", self.data, _cursor=self._cursor
                 ),
                 self,
             )
@@ -554,7 +554,10 @@ class Q2MysqlCursor(Q2Cursor):
                             where {pk_name} = '{pk_value}'
                            """
         )
-        return int_(row_number[0]["rownum"])
+        if row_number:
+            return int_(row_number[0]["rownum"])
+        else:
+            return 0
 
 
 class Q2PostgresqlCursor(Q2Cursor):
