@@ -29,6 +29,7 @@ def prepare_dataset(database: Q2Db):
     )
 
     schema.add_index("message_table", "message, uid")
+    schema.add_index("message_table", "message, uid, q2_time", "named_index")
 
     schema.add(table="just_table", column="uid", datatype="int", datalen=9, pk=True, ai=True)
     schema.add(table="just_table", column="data", datatype="int", datalen=9)

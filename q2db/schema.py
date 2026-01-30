@@ -11,10 +11,7 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-"""
-
-"""
-
+""" """
 
 if __name__ == "__main__":  # pragma: no cover
     import sys
@@ -109,15 +106,25 @@ class Q2DbSchema:
     def add_index(self, table="", index_expression="", index_name=""):
         if table not in self.schema["indexes"]:
             self.schema["indexes"][table] = {}
-        self.schema["indexes"][table]["expression"] = index_expression
-        self.schema["indexes"][table]["name"] = index_name
+        self.schema["indexes"][table][index_expression] = {"name": index_name}
 
     def get_schema_indexes(self):
         rez = []
         for x in self.schema["indexes"]:
-            di = dict(self.schema["indexes"][x])
-            di["table"] = x
-            rez.append(di)
+            for key, value in self.schema["indexes"][x].items():
+                di = dict(value)
+                di["expression"] = key
+                di["table"] = x
+                rez.append(di)
+
+        for key, value in {
+            x: {"expression": y for y, c in t["columns"].items() if c.get("index")}
+            for x, t in self.schema["tables"].items()
+        }.items():
+            if value:
+                di = dict(value)
+                di["table"] = key
+                rez.append(di)
         return rez
 
     def get_schema_table_attr(self, table="", column="", attr=""):
@@ -178,8 +185,12 @@ class Q2DbSchema:
         rez = []
         for linked_table_name in self.get_schema_table_attr():
             for linked_column_name in self.get_schema_table_attr(linked_table_name):
-                linked_column = self.get_schema_table_attr(linked_table_name, linked_column_name)
-                if linked_column.get("to_table") == primary_table and linked_column.get("to_column"):
+                linked_column = self.get_schema_table_attr(
+                    linked_table_name, linked_column_name
+                )
+                if linked_column.get("to_table") == primary_table and linked_column.get(
+                    "to_column"
+                ):
                     parentCol = linked_column.get("to_column")
                     rez.append(
                         {
@@ -214,5 +225,7 @@ class Q2DbSchema:
                 schema[col]["lenght"] = max(schema[col].get("lenght", 0), len(row[col]))
 
         for x in schema:
-            print(f"schema.add(table='{table}', '{x}', datatype='char', datalen={schema[x]['lenght']})")
+            print(
+                f"schema.add(table='{table}', '{x}', datatype='char', datalen={schema[x]['lenght']})"
+            )
         return schema
