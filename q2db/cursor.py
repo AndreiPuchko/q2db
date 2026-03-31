@@ -264,17 +264,19 @@ class Q2Cursor:
         return row index (row number)
         """
         pk_name = [x for x in self.primary_key_columns][0]
-        pk_value = str(dataDic[pk_name])
-        t = time.time()
-        for x in range(self.row_count()):
-            if time.time() - t > 0.5:
-                return 0
-            if pk_name in self._rows[x]:
-                if self._rows[x][pk_name] == pk_value:
-                    return x
-            else:
-                if self.record(x)[pk_name] == pk_value:
-                    return x
+        if pk_value := str(dataDic.get(pk_name)):
+            t = time.time()
+            for x in range(self.row_count()):
+                if time.time() - t > 0.5:
+                    return 0
+                if pk_name in self._rows[x]:
+                    if self._rows[x][pk_name] == pk_value:
+                        return x
+                else:
+                    if self.record(x)[pk_name] == pk_value:
+                        return x
+        else:
+            return 0
 
     def seek_row(self, data_dic):
         """
@@ -542,23 +544,25 @@ class Q2MysqlCursor(Q2Cursor):
         """
         pk_name = [x for x in self.primary_key_columns][0]
         pk_value = str(dataDic[pk_name])
-        _sql = self.sql.replace("*", pk_name)
-        row_number = self.q2_db._cursor(
-            f"""
-                           select rownum
-                            from
-                            (
-                            select z1.*, @i := @i + 1 as rownum
-                            from ( {_sql} ) z1, (select @i:= -1) z2
-                            ) qq
-                            where {pk_name} = '{pk_value}'
-                           """
-        )
-        if row_number:
-            return int_(row_number[0]["rownum"])
+        if pk_value := str(dataDic.get(pk_name)):
+            _sql = self.sql.replace("*", pk_name)
+            row_number = self.q2_db._cursor(
+                f"""
+                            select rownum
+                                from
+                                (
+                                select z1.*, @i := @i + 1 as rownum
+                                from ( {_sql} ) z1, (select @i:= -1) z2
+                                ) qq
+                                where {pk_name} = '{pk_value}'
+                            """
+            )
+            if row_number:
+                return int_(row_number[0]["rownum"])
+            else:
+                return 0
         else:
             return 0
-
 
 class Q2PostgresqlCursor(Q2Cursor):
     _transaction = "start transaction"
