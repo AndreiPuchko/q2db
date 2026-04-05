@@ -399,6 +399,8 @@ class Q2Db:
             if not self.guest_mode and table_name not in db_only_tables:
                 self._add_q2_columns(schema_columns)
             for column in schema_columns:
+                if not column:
+                    continue
                 column = safe_identifier(column)
                 colDic = self.db_schema.get_schema_attr(table_name, column)
                 if column not in database_columns:  # new column
