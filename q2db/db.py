@@ -678,8 +678,8 @@ class Q2Db:
             ):
                 self.last_sql_error = (
                     "Foreign key error for insert:"
-                    + f" For {self.ec}{table_name}{self.ec}"
-                    + ".{escape_char}{child_column}{escape_char}".format(**x)
+                    + f" For {table_name}"
+                    + ".{child_column}".format(**x)
                     + " not found value '{child_value}' ".format(**x)
                     + "in table "
                     + x["primary_table"]
