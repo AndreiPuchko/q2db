@@ -677,15 +677,25 @@ class Q2Db:
                 == {}
             ):
                 self.last_sql_error = (
-                    "Foreign key error for insert:"
-                    + f" For {table_name}"
+                    "Insert failed: foreign key value "
+                    + "'{child_value}'".format(**x)
+                    + f" from {table_name}"
                     + ".{child_column}".format(**x)
-                    + " not found value '{child_value}' ".format(**x)
-                    + "in table "
+                    + " does not exist in "
                     + x["primary_table"]
                     + ".{primary_column}".format(**x)
                 )
-                self.last_error_data = x
+                self.last_error_data = {
+                    "error": "FK_VIOLATION",
+                    "message": self.last_sql_error,
+                    "action": "INSERT",
+                    "source_table": table_name,
+                    "source_column": x["child_column"],
+                    "target_table": x["primary_table"],
+                    "target_column": x["primary_column"],
+                    "rejected_value": x["child_value"],
+                }
+
                 return False
 
         table_columns = self.get_database_columns(table_name[:])
@@ -825,14 +835,14 @@ class Q2Db:
         )
 
         if not rows:
-            self.insert(table_name, record, _cursor=_cursor)
-            return record
+            return self.insert(table_name, record, _cursor=_cursor)
 
-        self.update(table_name, record, _cursor=_cursor)
-
-        result = rows[0].copy()
+        if not (ures := self.update(table_name, record, _cursor=_cursor)):
+            return False
+        result = dict(rows[0])
         result.update(record)
-        return result
+        record.update(result)
+        return True
 
     def update(self, table_name="", record={}, _cursor=None):
         """update from dictionary to table"""
@@ -857,15 +867,24 @@ class Q2Db:
                 x["primary_table"] = safe_identifier(x["primary_table"])
                 if self.get(x["primary_table"], "%(primary_column)s='%(child_value)s'" % x) == {}:
                     self.last_sql_error = (
-                        "Foreign key error for update:"
-                        + f" For {table_name}"
+                        "Update failed: foreign key value "
+                        + "'{child_value}'".format(**x)
+                        + f" from {table_name}"
                         + ".{child_column}".format(**x)
-                        + " not found value '{child_value}' ".format(**x)
-                        + "in table "
+                        + " does not exist in "
                         + x["primary_table"]
                         + ".{primary_column}".format(**x)
                     )
-                    self.last_error_data = x
+                    self.last_error_data = {
+                        "error": "FK_VIOLATION",
+                        "message": self.last_sql_error,
+                        "action": "UPDATE",
+                        "source_table": table_name,
+                        "source_column": x["child_column"],
+                        "target_table": x["primary_table"],
+                        "target_column": x["primary_column"],
+                        "rejected_value": x["child_value"],
+                    }
                     return False
 
         columns_list = [x for x in record if x in table_columns]
@@ -915,14 +934,24 @@ class Q2Db:
             rez = self._cursor(sql, (x["parent_value"],))
             if {} != rez:
                 self.last_sql_error = (
-                    "Foreign key error for delete:"
-                    + f" Row in {self.ec}{table_name}{self.ec}"
-                    + ".{escape_char}{parent_column}{escape_char}".format(**x)
-                    + "={parent_value}".format(**x)
-                    + " can not to be deleted, because "
-                    + ' it used in table "{child_table}"."{child_column}"'.format(**x)
+                    "Delete failed: "
+                    + f" Row in {table_name}"
+                    + ".{parent_column}".format(**x)
+                    + "('{parent_value}')".format(**x)
+                    + " has dependent records in "
+                    + "{child_table}.{child_column}".format(**x)
+                    + "."
                 )
-                self.last_error_data = x
+                self.last_error_data = {
+                    "error": "FK_VIOLATION",
+                    "message": self.last_sql_error,
+                    "action": "DELETE",
+                    "source_table": table_name,
+                    "source_column": x["parent_column"],
+                    "target_table": x["child_table"],
+                    "target_column": x["child_column"],
+                    "rejected_value": x["parent_value"],
+                }
 
                 return False
         table_columns = self.get_database_columns(table_name)
