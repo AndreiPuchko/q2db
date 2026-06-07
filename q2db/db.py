@@ -605,10 +605,12 @@ class Q2Db:
         self._cursor(self.db_cursor_class._transaction)
 
     def commit(self):
-        self._cursor("commit")
+        # self._cursor("commit")
+        self.connection.commit()
 
     def rollback(self):
-        self._cursor("rollback")
+        # self._cursor("rollback")
+        self.connection.rollback()
 
     def raw_insert(self, table_name="", record={}, _cursor=None):
         """insert dicti or list of dict into table"""
