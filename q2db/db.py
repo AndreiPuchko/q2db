@@ -664,6 +664,7 @@ class Q2Db:
 
         if _cursor is None:
             _cursor = self.raw_cursor()
+        self.last_error_data = {}
 
         record["q2_time"] = f"{self.cursor().now()}"
         record["q2_mode"] = "i"
@@ -854,6 +855,7 @@ class Q2Db:
 
         if _cursor is None:
             _cursor = self.raw_cursor()
+        self.last_error_data = {}
 
         table_columns = self.get_database_columns(table_name)
         primary_key_columns = self.get_primary_key_columns(table_name)
