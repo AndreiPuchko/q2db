@@ -840,7 +840,16 @@ class Q2Db:
         if not rows:
             return self.insert(table_name, record, _cursor=_cursor)
 
-        if not (ures := self.update(table_name, record, _cursor=_cursor)):
+        primary_key_columns = self.get_primary_key_columns(table_name)
+        if is_sub_list(primary_key_columns.keys(), record.keys()):
+            if len(rows) == 1:
+                for x in primary_key_columns:
+                    if x not in record:
+                        record[x] = rows[0][x]
+            else:
+                return False
+
+        if not self.update(table_name, record, _cursor=_cursor):
             return False
         result = dict(rows[0])
         result.update(record)
