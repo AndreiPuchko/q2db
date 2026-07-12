@@ -13,6 +13,72 @@ import pytest
 from unittest.mock import patch, mock_open
 
 
+def test_mysql_connect_disables_autocommit_for_transactions():
+    class FakeConnection:
+        def __init__(self):
+            self.autocommit = None
+
+    class FakeConnector:
+        @staticmethod
+        def connect(**kwargs):
+            return FakeConnection()
+
+    db = object.__new__(Q2Db)
+    db.db_engine_name = "mysql"
+    db.db_api_engine = FakeConnector
+
+    connection = db.connect(user="root", password="secret", host="localhost", database_name="q2test", port=3306)
+
+    assert connection.autocommit is False
+
+
+def test_mysql_reconnect_after_disconnect():
+    class FakeError(Exception):
+        pass
+
+    class FakeCursor:
+        def __init__(self, connection):
+            self.connection = connection
+            self.description = None
+
+        def execute(self, sql, data=None):
+            if self.connection.execute_attempts == 0:
+                self.connection.execute_attempts += 1
+                raise FakeError("2006 (HY000): MySQL server has gone away")
+            self.connection.execute_attempts += 1
+            self.description = None
+
+        def fetchall(self):
+            return []
+
+    class FakeConnection:
+        def __init__(self):
+            self.execute_attempts = 0
+            self.reconnect_calls = 0
+
+        def reconnect(self):
+            self.reconnect_calls += 1
+
+        def cursor(self):
+            return FakeCursor(self)
+
+    db = object.__new__(Q2Db)
+    db.db_engine_name = "mysql"
+    db.db_api_engine = type("FakeDbApi", (), {"Error": FakeError})
+    db.connection = FakeConnection()
+    db.last_sql_error = ""
+    db.last_sql = ""
+    db.last_record = ""
+    db.ec = '"'
+    db.ph = "%s"
+
+    result = db._cursor("select 1")
+
+    assert result == {}
+    assert db.connection.reconnect_calls == 1
+    assert db.last_sql_error == ""
+
+
 def prepare_dataset(database: Q2Db):
     schema = Q2DbSchema()
     schema.add(table="topic_table", column="uid", datatype="int", datalen=9, pk=True)

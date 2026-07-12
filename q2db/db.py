@@ -249,7 +249,7 @@ class Q2Db:
                 port=port if port else 3306,
                 database=database_name,
             )
-            connection.autocommit = True
+            connection.autocommit = False
         elif self.db_engine_name == "postgresql":
             connection = self.db_api_engine.connect(
                 user=user,
@@ -602,15 +602,19 @@ class Q2Db:
                 record[x] = "0"
 
     def transaction(self):
+        if hasattr(self.connection, "autocommit"):
+            self.connection.autocommit = False
         self._cursor(self.db_cursor_class._transaction)
 
     def commit(self):
-        # self._cursor("commit")
         self.connection.commit()
+        if hasattr(self.connection, "autocommit"):
+            self.connection.autocommit = True
 
     def rollback(self):
-        # self._cursor("rollback")
         self.connection.rollback()
+        if hasattr(self.connection, "autocommit"):
+            self.connection.autocommit = True
 
     def raw_insert(self, table_name="", record={}, _cursor=None):
         """insert dicti or list of dict into table"""
@@ -1092,25 +1096,37 @@ class Q2Db:
             sql = sql.replace("`", '"')
         elif self.db_engine_name == "sqlite3":
             sql = sql.replace("%s", "?")
-        try:
-            if _cursor is None:
-                # _cursor = self.connection.cursor()
-                _cursor = self.raw_cursor()
-            if data:
-                _cursor.execute(sql, data)
-            else:
-                _cursor.execute(sql)
-            if _cursor.description:
-                i = 0
-                for x in _cursor.fetchall():
-                    _rows[i] = self._dict_factory(_cursor, x, sql)
-                    i += 1
-        except self.db_api_engine.Error as err:
-            self.last_sql_error = str(err) + "> " + sql
-            self.last_sql = sql
-            self.last_record = "!".join([f"{x}" for x in data])
-            # _rows = {0: {}}
-            _rows = dict()
+
+        try_count = 2 if self.db_engine_name == "mysql" else 1
+        for attempt in range(try_count):
+            try:
+                if _cursor is None:
+                    _cursor = self.raw_cursor()
+                if data:
+                    _cursor.execute(sql, data)
+                else:
+                    _cursor.execute(sql)
+                if _cursor.description:
+                    i = 0
+                    for x in _cursor.fetchall():
+                        _rows[i] = self._dict_factory(_cursor, x, sql)
+                        i += 1
+                return _rows
+            except self.db_api_engine.Error as err:
+                if self.db_engine_name != "mysql" or attempt >= try_count - 1:
+                    self.last_sql_error = str(err) + "> " + sql
+                    self.last_sql = sql
+                    self.last_record = "!".join([f"{x}" for x in data])
+                    return dict()
+
+                if hasattr(self.connection, "reconnect"):
+                    self.connection.reconnect()
+                if _cursor is not None:
+                    try:
+                        _cursor.close()
+                    except Exception:
+                        pass
+                _cursor = None
         return _rows
 
     def cursor(self, sql="", table_name="", order="", where="", data=[], cache_flag=True):
