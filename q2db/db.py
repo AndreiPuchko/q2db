@@ -841,7 +841,7 @@ class Q2Db:
             return self.insert(table_name, record, _cursor=_cursor)
 
         primary_key_columns = self.get_primary_key_columns(table_name)
-        if is_sub_list(primary_key_columns.keys(), record.keys()):
+        if not is_sub_list(primary_key_columns.keys(), record.keys()):
             if len(rows) == 1:
                 for x in primary_key_columns:
                     if x not in record:
@@ -1073,7 +1073,12 @@ class Q2Db:
         }
 
     def raw_cursor(self):
-        return self.connection.cursor()
+        try:
+            return self.connection.cursor()
+        except Exception:
+            if hasattr(self.connection, "reconnect"):
+                self.connection.reconnect()
+            return self.connection.cursor()
 
     def parse_sql(self, sql, data=[]):
         return parse_sql(sql, data, placeholder=self.ph)
