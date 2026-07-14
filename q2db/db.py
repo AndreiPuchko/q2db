@@ -249,7 +249,7 @@ class Q2Db:
                 port=port if port else 3306,
                 database=database_name,
             )
-            connection.autocommit = False
+            connection.autocommit = True
         elif self.db_engine_name == "postgresql":
             connection = self.db_api_engine.connect(
                 user=user,
