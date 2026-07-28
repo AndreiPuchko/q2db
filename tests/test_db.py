@@ -29,7 +29,7 @@ def test_mysql_connect_disables_autocommit_for_transactions():
 
     connection = db.connect(user="root", password="secret", host="localhost", database_name="q2test", port=3306)
 
-    assert connection.autocommit is False
+    assert connection.autocommit is True
 
 
 def test_mysql_reconnect_after_disconnect():

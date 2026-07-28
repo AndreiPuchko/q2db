@@ -93,7 +93,7 @@ class Q2Cursor:
         self._columns = []
         self._row_count = 0
         self._current_row = 0
-        self._cursor = self.q2_db.connection.cursor()
+        self._cursor = self.q2_db.raw_cursor()
         self.refresh()
         self.r = Record(self)
         self.tick_callback = None
