@@ -117,14 +117,26 @@ class Q2DbSchema:
                 di["table"] = x
                 rez.append(di)
 
-        for key, value in {
-            x: {"expression": y for y, c in t["columns"].items() if c.get("index")}
-            for x, t in self.schema["tables"].items()
-        }.items():
-            if value:
-                di = dict(value)
-                di["table"] = key
-                rez.append(di)
+        # for key, value in {
+        #     x: {"expression": y for y, c in t["columns"].items() if c.get("index")}
+        #     for x, t in self.schema["tables"].items()
+        # }.items():
+        #     if value:
+        #         di = dict(value)
+        #         di["table"] = key
+        #         rez.append(di)
+        idx = [
+            [{"table": list(d.keys())[0], "expression": a} for a in list(d.values())[0]]
+            for d in [
+                {x: [u for u, k in t["columns"].items() if k.get("index")]}
+                for x, t in self.schema["tables"].items()
+            ]
+            if list(d.values())[0]
+        ]
+
+        for x in idx:
+            for y in x:
+                rez.append(y)
         return rez
 
     def get_schema_table_attr(self, table="", column="", attr=""):
@@ -185,12 +197,8 @@ class Q2DbSchema:
         rez = []
         for linked_table_name in self.get_schema_table_attr():
             for linked_column_name in self.get_schema_table_attr(linked_table_name):
-                linked_column = self.get_schema_table_attr(
-                    linked_table_name, linked_column_name
-                )
-                if linked_column.get("to_table") == primary_table and linked_column.get(
-                    "to_column"
-                ):
+                linked_column = self.get_schema_table_attr(linked_table_name, linked_column_name)
+                if linked_column.get("to_table") == primary_table and linked_column.get("to_column"):
                     parentCol = linked_column.get("to_column")
                     rez.append(
                         {
@@ -225,7 +233,5 @@ class Q2DbSchema:
                 schema[col]["lenght"] = max(schema[col].get("lenght", 0), len(row[col]))
 
         for x in schema:
-            print(
-                f"schema.add(table='{table}', '{x}', datatype='char', datalen={schema[x]['lenght']})"
-            )
+            print(f"schema.add(table='{table}', '{x}', datatype='char', datalen={schema[x]['lenght']})")
         return schema

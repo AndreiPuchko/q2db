@@ -13,6 +13,18 @@ import pytest
 from unittest.mock import patch, mock_open
 
 
+def test_cursor_index_metadata_sql_helpers():
+    sqlite_sql = Q2SqliteCursor.get_table_indexes_sql("topic_table", "", "test_db")
+    mysql_sql = Q2MysqlCursor.get_table_indexes_sql("topic_table", "", "test_db")
+    postgres_sql = Q2PostgresqlCursor.get_table_indexes_sql("topic_table", "", "test_db")
+
+    assert "pragma_index_list" in sqlite_sql.lower()
+    assert "index_name" in mysql_sql.lower()
+    assert "group_concat" in mysql_sql.lower()
+    assert "pg_index" in postgres_sql.lower()
+    assert "is_unique" in postgres_sql.lower()
+
+
 def test_mysql_connect_disables_autocommit_for_transactions():
     class FakeConnection:
         def __init__(self):

@@ -576,9 +576,15 @@ class Q2Db:
             x["escape_char"] = self.ec
             if not x.get("name"):
                 x["name"] = re.sub(r"[^\w\d]+", "_", x["expression"])
+            _index_name = x["_index_name"] = "{table}_{name}".format(**x)
+
+            sql = self.db_cursor_class.get_table_indexes_sql(x["table"], self.database_name)
+            sql = f"select * from ({sql}) qq where index_name='{_index_name}'"
+            if len(self._cursor(sql)) > 0:
+                continue
+
             sql_cmd = (
-                "CREATE INDEX {escape_char}{table}_{name}{escape_char} "
-                " on {escape_char}{table}{escape_char} ({expression})"
+                "CREATE INDEX {escape_char}{_index_name}{escape_char} " " on {escape_char}{table}{escape_char} ({expression})"
             ).format(**x)
             self.run_migrate_sql(sql_cmd)
 

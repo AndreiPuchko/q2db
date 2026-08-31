@@ -503,6 +503,23 @@ class Q2SqliteCursor(Q2Cursor):
                     {where_clause}
                     """
 
+    @staticmethod
+    def get_table_indexes_sql(table_name="", database_name="", where_clause=""):
+        if where_clause:
+            where_clause = f" WHERE {where_clause}"
+        return f"""
+                    SELECT
+                        il.name AS index_name,
+                        il.unique AS is_unique,
+                        GROUP_CONCAT(ii.name) AS columns,
+                        '{table_name}' AS table_name
+                    FROM pragma_index_list('{table_name}') il
+                    LEFT JOIN pragma_index_info(il.name) ii ON 1 = 1
+                    {where_clause}
+                    GROUP BY il.name, il.unique
+                    ORDER BY il.name
+                    """
+
 
 class Q2MysqlCursor(Q2Cursor):
     _transaction = "start transaction"
@@ -537,6 +554,24 @@ class Q2MysqlCursor(Q2Cursor):
                     {where_clause}
                     """
 
+    @staticmethod
+    def get_table_indexes_sql(table_name="", database_name="", where_clause=""):
+        if where_clause:
+            where_clause = f" AND {where_clause}"
+        return f"""
+                    SELECT
+                        TABLE_NAME as table_name,
+                        INDEX_NAME as index_name,
+                        CASE WHEN NON_UNIQUE = 0 THEN 1 ELSE 0 END as is_unique,
+                        GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) as columns
+                    FROM INFORMATION_SCHEMA.STATISTICS
+                    WHERE TABLE_SCHEMA = '{database_name}'
+                        AND TABLE_NAME = '{table_name}'
+                        {where_clause}
+                    GROUP BY TABLE_NAME, INDEX_NAME, NON_UNIQUE
+                    ORDER BY INDEX_NAME
+                    """
+
     def seek_primary_key_row(self, dataDic):
         """
         seek for row with primary kev == dataDic[pk]
@@ -546,8 +581,7 @@ class Q2MysqlCursor(Q2Cursor):
         pk_value = str(dataDic[pk_name])
         if pk_value := str(dataDic.get(pk_name)):
             _sql = self.sql.replace("*", pk_name)
-            row_number = self.q2_db._cursor(
-                f"""
+            row_number = self.q2_db._cursor(f"""
                             select rownum
                                 from
                                 (
@@ -555,14 +589,14 @@ class Q2MysqlCursor(Q2Cursor):
                                 from ( {_sql} ) z1, (select @i:= -1) z2
                                 ) qq
                                 where {pk_name} = '{pk_value}'
-                            """
-            )
+                            """)
             if row_number:
                 return int_(row_number[0]["rownum"])
             else:
                 return 0
         else:
             return 0
+
 
 class Q2PostgresqlCursor(Q2Cursor):
     _transaction = "start transaction"
@@ -617,4 +651,30 @@ class Q2PostgresqlCursor(Q2Cursor):
                         {where_clause}
 
                     order by ordinal_position
+                    """
+
+    @staticmethod
+    def get_table_indexes_sql(table_name="", database_name="", where_clause=""):
+        if where_clause:
+            where_clause = f" AND {where_clause}"
+        return f"""
+                    SELECT
+                        t.relname AS table_name,
+                        i.relname AS index_name,
+                        ix.indisunique AS is_unique,
+                        array_to_string(array_agg(a.attname ORDER BY x.rn), ',') AS columns
+                    FROM pg_index ix
+                    JOIN pg_class t ON t.oid = ix.indrelid
+                    JOIN pg_class i ON i.oid = ix.indexrelid
+                    JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS x(attnum, rn) ON true
+                    LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = x.attnum
+                    WHERE t.relname = '{table_name}'
+                        AND t.relnamespace = (
+                            SELECT oid
+                            FROM pg_namespace
+                            WHERE nspname = 'public'
+                        )
+                        {where_clause}
+                    GROUP BY t.relname, i.relname, ix.indisunique
+                    ORDER BY i.relname
                     """
