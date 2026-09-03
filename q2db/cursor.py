@@ -130,7 +130,65 @@ class Q2Cursor:
 
     def set_order(self, sort=""):
         """set order when cursor base on table"""
-        self.order = sort
+        sql_keywords = {
+            "and",
+            "asc",
+            "case",
+            "collate",
+            "desc",
+            "else",
+            "end",
+            "first",
+            "is",
+            "last",
+            "like",
+            "null",
+            "nulls",
+            "not",
+            "or",
+            "then",
+            "when",
+        }
+        escaped_sort = []
+        position = 0
+        while position < len(sort):
+            char = sort[position]
+            if char in "'\"`":
+                quote = char
+                end = position + 1
+                while end < len(sort):
+                    if sort[end] == quote:
+                        if end + 1 < len(sort) and sort[end + 1] == quote:
+                            end += 2
+                            continue
+                        end += 1
+                        break
+                    end += 1
+                escaped_sort.append(sort[position:end])
+                position = end
+                continue
+
+            if char.isalpha() or char == "_":
+                end = position + 1
+                while end < len(sort) and (sort[end].isalnum() or sort[end] in "_$"):
+                    end += 1
+                identifier = sort[position:end]
+                next_position = end
+                while next_position < len(sort) and sort[next_position].isspace():
+                    next_position += 1
+                if identifier.lower() in sql_keywords or (
+                    next_position < len(sort) and sort[next_position] == "("
+                ):
+                    escaped_sort.append(identifier)
+                else:
+                    escaped_sort.append(f"{self.ec}{identifier}{self.ec}")
+                position = end
+                continue
+
+            escaped_sort.append(char)
+            position += 1
+
+        self.order = "".join(escaped_sort)
         return self
 
     def set_where(self, where=""):
