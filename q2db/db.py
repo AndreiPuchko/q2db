@@ -31,6 +31,8 @@ if __name__ == "__main__":  # pragma: no cover
 
 import re
 import sqlite3 as db_sqlite_connector
+import hashlib
+import time
 
 # import mysql.connector as db_mysql_connector
 # import psycopg2 as db_postgresql_connector
@@ -584,7 +586,8 @@ class Q2Db:
                 continue
 
             sql_cmd = (
-                "CREATE INDEX {escape_char}{_index_name}{escape_char} " " on {escape_char}{table}{escape_char} ({expression})"
+                "CREATE INDEX {escape_char}{_index_name}{escape_char} "
+                " on {escape_char}{table}{escape_char} ({expression})"
             ).format(**x)
             self.run_migrate_sql(sql_cmd)
 
@@ -1156,3 +1159,63 @@ class Q2Db:
             where=where,
             cache_flag=cache_flag,
         )
+
+    def _lock_key(self, name: str) -> int:
+        value = name.encode()
+        return int.from_bytes(
+            hashlib.sha256(value).digest()[:8],
+            byteorder="big",
+            signed=True,
+        )
+
+    def lock(self, name: str, timeout: float = 0.5):
+        lock_name = f"{self.database_name}:{name}"
+
+        if self.db_engine_name == "mysql":
+            cu = self.cursor(
+                sql="SELECT GET_LOCK(%s, %s) AS lock_status",
+                data=(
+                    lock_name,
+                    timeout,
+                ),
+            )
+            return int(cu.r.lock_status) == 1
+
+        elif self.db_engine_name == "postgresql":
+            key = self._lock_key(lock_name)
+            end = time.monotonic() + timeout
+            while True:
+                cu = self.cursor(sql="SELECT pg_try_advisory_lock(%s) AS lock_status", data=(key,))
+                if str(cu.r.lock_status).lower() in ("1", "true"):
+                    return True
+                if timeout == 0 or time.monotonic() >= end:
+                    return False
+                time.sleep(0.01)
+
+        elif self.db_engine_name == "sqlite3":
+            return True
+
+        return False
+
+    def unlock(self, name: str):
+        lock_name = f"{self.database_name}:{name}"
+
+        if self.db_engine_name == "mysql":
+            cu = self.cursor(
+                sql="SELECT RELEASE_LOCK(%s) AS lock_status",
+                data=(lock_name,),
+            )
+            return int(cu.r.lock_status) == 1
+
+        elif self.db_engine_name == "postgresql":
+            key = self._lock_key(lock_name)
+            cu = self.cursor(
+                sql="SELECT pg_advisory_unlock(%s) AS lock_status",
+                data=(key,),
+            )
+            return str(cu.r.lock_status).lower() in ("1", "true")
+
+        elif self.db_engine_name == "sqlite3":
+            return True
+
+        return False

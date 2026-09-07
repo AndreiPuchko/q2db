@@ -91,6 +91,17 @@ def test_mysql_reconnect_after_disconnect():
     assert db.last_sql_error == ""
 
 
+def test_sqlite_lock_unlock():
+    database = Q2Db()
+
+    assert database.lock("test-lock") is True
+    assert database.unlock("test-lock") is True
+    assert database.lock("test:lock") is True
+    assert database.unlock("test:lock") is True
+
+    database.close()
+
+
 def prepare_dataset(database: Q2Db):
     schema = Q2DbSchema()
     schema.add(table="topic_table", column="uid", datatype="int", datalen=9, pk=True)
