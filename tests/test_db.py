@@ -39,7 +39,9 @@ def test_mysql_connect_disables_autocommit_for_transactions():
     db.db_engine_name = "mysql"
     db.db_api_engine = FakeConnector
 
-    connection = db.connect(user="root", password="secret", host="localhost", database_name="q2test", port=3306)
+    connection = db.connect(
+        user="root", password="secret", host="localhost", database_name="q2test", port=3306
+    )
 
     assert connection.autocommit is True
 
@@ -126,6 +128,8 @@ def prepare_dataset(database: Q2Db):
     schema.add(table="just_table2", column="uid", datatype="char", datalen=9, pk=True)
     schema.add(table="just_table2", column="name", datatype="char", datalen=10)
 
+    schema.add(table="sites", column="name", datatype="char", datalen=10, uk="*")
+
     database.cursor("drop table if exists topic_table")
     database.cursor("drop table if exists log_topic_table")
     database.cursor("drop table if exists message_table")
@@ -134,8 +138,14 @@ def prepare_dataset(database: Q2Db):
     database.cursor("drop table if exists log_just_table")
     database.cursor("drop table if exists just_table2")
     database.cursor("drop table if exists log_just_table2")
+    database.cursor("drop table if exists sites")
+    database.cursor("drop table if exists log_sites")
 
     database.set_schema(schema)
+
+    assert database.insert("sites", {"name": "m1"})
+    assert database.insert("sites", {"name": "m1"}) is False
+    assert database.insert("sites", {"name": "m2"})
 
     assert database.migrate_error_list == []
 

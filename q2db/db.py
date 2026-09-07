@@ -556,11 +556,13 @@ class Q2Db:
             or column_definition.get("to_table")
         ):
             column_definition["escape_char"] = self.ec
+            column_definition["UNIQUE"] = "UNIQUE" if column_definition.get("uk") else ""
             sql_cmd = (
-                "CREATE INDEX {escape_char}{table}_{column}{escape_char} ".format(**column_definition)
+                "CREATE {UNIQUE} INDEX {escape_char}{table}_{column}{escape_char} ".format(**column_definition)
                 + " on {escape_char}{table}{escape_char} ".format(**column_definition)
                 + " ({escape_char}{column}{escape_char})".format(**column_definition)
             )
+            del column_definition["UNIQUE"]
             self.run_migrate_sql(sql_cmd)
 
     def run_migrate_sql(self, sql_cmd):
