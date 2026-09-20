@@ -558,7 +558,9 @@ class Q2Db:
             column_definition["escape_char"] = self.ec
             column_definition["UNIQUE"] = "UNIQUE" if column_definition.get("uk") else ""
             sql_cmd = (
-                "CREATE {UNIQUE} INDEX {escape_char}{table}_{column}{escape_char} ".format(**column_definition)
+                "CREATE {UNIQUE} INDEX {escape_char}{table}_{column}{escape_char} ".format(
+                    **column_definition
+                )
                 + " on {escape_char}{table}{escape_char} ".format(**column_definition)
                 + " ({escape_char}{column}{escape_char})".format(**column_definition)
             )
@@ -1118,10 +1120,8 @@ class Q2Db:
                 else:
                     _cursor.execute(sql)
                 if _cursor.description:
-                    i = 0
-                    for x in _cursor.fetchall():
+                    for i, x in enumerate(_cursor.fetchall()):
                         _rows[i] = self._dict_factory(_cursor, x, sql)
-                        i += 1
                 return _rows
             except self.db_api_engine.Error as err:
                 if self.db_engine_name != "mysql" or attempt >= try_count - 1:
@@ -1130,7 +1130,11 @@ class Q2Db:
                     self.last_record = "!".join([f"{x}" for x in data])
                     return dict()
 
-                if hasattr(self.connection, "reconnect"):
+                if (
+                    hasattr(self.connection, "reconnect")
+                    and hasattr(self.connection, "is_connected")
+                    and not self.connection.is_connected()
+                ):
                     self.connection.reconnect()
                 if _cursor is not None:
                     try:
