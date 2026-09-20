@@ -1124,7 +1124,11 @@ class Q2Db:
                         _rows[i] = self._dict_factory(_cursor, x, sql)
                 return _rows
             except self.db_api_engine.Error as err:
-                if self.db_engine_name != "mysql" or attempt >= try_count - 1:
+                is_timeout_error = False
+                if self.db_engine_name == "mysql" and hasattr(err, "errno") and err.errno in (2006, 2013):
+                    is_timeout_error = True
+
+                if self.db_engine_name != "mysql" or attempt >= try_count - 1 or not is_timeout_error:
                     self.last_sql_error = str(err) + "> " + sql
                     self.last_sql = sql
                     self.last_record = "!".join([f"{x}" for x in data])
